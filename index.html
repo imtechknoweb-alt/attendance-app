@@ -1,163 +1,364 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Attendance Diagnostic</title>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="theme-color" content="#1a73e8"/>
+  <title>Student Attendance</title>
+
+  <!-- QR Scanner & Crypto Libraries -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
-  <style>
-    body { font-family: sans-serif; background: #222; color: #fff; padding: 20px; text-align: center; }
-    .card { background: #333; padding: 20px; border-radius: 10px; max-width: 400px; margin: 0 auto; }
-    input, select { width: 100%; padding: 10px; margin: 10px 0; border-radius: 5px; border: none; }
-    button { width: 100%; padding: 15px; background: #1a73e8; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
-    #reader { width: 100%; background: #000; margin-top: 20px; min-height: 300px; }
-    .error { color: #ff4444; background: #330000; padding: 10px; margin: 10px 0; display: none; border: 1px solid red; }
-    .success { color: #44ff44; background: #003300; padding: 10px; margin: 10px 0; display: none; border: 1px solid green; }
-    #status { margin-top: 10px; color: #aaa; }
-  </style>
+
+<style>
+/* ── RESET & VARIABLES ──────────────────────── */
+:root{--primary:#1a73e8;--bg:#f0f2f5;--card:#fff;--text:#202124;--sub:#5f6368;--border:#dadce0;--green:#188038;--red:#d93025;--orange:#f9ab00;--shadow:0 1px 3px rgba(0,0,0,0.12),0 1px 2px rgba(0,0,0,0.24);}
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-tap-highlight-color:transparent;}
+body{background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+
+/* ── SCREENS ────────────────────────────────── */
+.screen{display:none;flex-direction:column;height:100%;width:100%;position:absolute;top:0;left:0;background:var(--bg);z-index:1;}
+.screen.active{display:flex;z-index:2;animation:fadeIn 0.3s ease;}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+
+/* ── COMPONENTS ─────────────────────────────── */
+.header{background:var(--primary);color:#fff;padding:16px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 4px rgba(0,0,0,0.2);z-index:10;}
+.header h1{font-size:18px;font-weight:500;}
+.header .clock{font-size:14px;opacity:0.9;}
+
+.btn{border:none;border-radius:8px;padding:0 24px;height:48px;font-size:16px;font-weight:600;cursor:pointer;transition:transform 0.1s;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;}
+.btn:active{transform:scale(0.96);}
+.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow);}
+.btn-outline{background:transparent;border:2px solid var(--primary);color:var(--primary);}
+.btn-danger{background:var(--red);color:#fff;}
+.btn-sm{height:36px;font-size:14px;padding:0 16px;width:auto;}
+
+/* ── LOGIN SCREEN ───────────────────────────── */
+#screen-login{justify-content:center;padding:24px;}
+.login-card{background:var(--card);padding:32px 24px;border-radius:16px;box-shadow:var(--shadow);text-align:center;max-width:400px;margin:0 auto;width:100%;}
+.avatar{width:64px;height:64px;background:var(--primary);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:bold;margin:0 auto 16px;}
+.input-group{margin-bottom:20px;text-align:left;}
+.input-group label{display:block;font-size:12px;color:var(--sub);margin-bottom:6px;font-weight:600;text-transform:uppercase;}
+.input-field{width:100%;height:48px;padding:0 16px;border:1px solid var(--border);border-radius:8px;font-size:16px;outline:none;background:#fff;}
+.input-field:focus{border-color:var(--primary);box-shadow:0 0 0 2px rgba(26,115,232,0.2);}
+
+/* ── SCANNER SCREEN ─────────────────────────── */
+#screen-scanner{background:#000;}
+.scanner-container{flex:1;position:relative;display:flex;flex-direction:column;justify-content:center;align-items:center;}
+#reader{width:100%;height:100%;object-fit:cover;}
+#reader video{object-fit:cover;width:100%!important;height:100%!important;}
+
+.scan-overlay{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;border:50px solid rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;}
+.scan-overlay::after{content:"";width:250px;height:250px;border:4px solid var(--green);border-radius:12px;box-shadow:0 0 0 4000px rgba(0,0,0,0.5);}
+
+.scan-ui{position:absolute;bottom:0;left:0;right:0;padding:24px;background:linear-gradient(to top, rgba(0,0,0,0.9), transparent);color:#fff;text-align:center;}
+.status-pill{background:rgba(255,255,255,0.2);padding:6px 16px;border-radius:20px;font-size:14px;display:inline-block;margin-bottom:16px;backdrop-filter:blur(4px);}
+
+/* Result Popup */
+.result-popup{position:absolute;top:50%;left:50%;transform:translate(-50%, -50%) scale(0.9);background:var(--card);width:85%;max-width:320px;padding:20px;border-radius:16px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.5);opacity:0;pointer-events:none;transition:all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);}
+.result-popup.show{opacity:1;transform:translate(-50%, -50%) scale(1);pointer-events:auto;}
+.res-icon{font-size:48px;margin-bottom:8px;}
+.res-title{font-size:20px;font-weight:700;margin-bottom:4px;}
+.res-subtitle{font-size:14px;color:var(--sub);margin-bottom:12px;}
+.res-meta{background:var(--bg);padding:10px;border-radius:8px;font-size:13px;text-align:left;color:var(--text);}
+.res-meta div{margin:2px 0;}
+
+.scanner-controls{position:absolute;bottom:24px;width:100%;display:flex;gap:12px;padding:0 24px;justify-content:center;}
+.scanner-controls button{flex:1;background:rgba(255,255,255,0.2);backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,0.3);color:#fff;}
+
+/* ── LOG SCREEN ─────────────────────────────── */
+#screen-log{background:var(--bg);}
+.log-list{padding:16px;overflow-y:auto;flex:1;}
+.log-item{background:var(--card);padding:12px;border-radius:12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 2px rgba(0,0,0,0.05);}
+.log-info h3{font-size:15px;font-weight:600;}
+.log-info p{font-size:12px;color:var(--sub);}
+.log-status{font-size:12px;font-weight:700;padding:4px 10px;border-radius:12px;}
+.status-present{background:#e6f4ea;color:var(--green);}
+.status-late{background:#fce8e6;color:var(--red);}
+.empty-state{text-align:center;color:var(--sub);margin-top:40px;}
+
+/* ── LOADER ─────────────────────────────────── */
+.loader-overlay{position:fixed;inset:0;background:rgba(255,255,255,0.9);z-index:99;display:flex;align-items:center;justify-content:center;flex-direction:column;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+.loader-overlay.active{opacity:1;pointer-events:auto;}
+.spinner{width:40px;height:40px;border:4px solid var(--bg);border-top-color:var(--primary);border-radius:50%;animation:spin 0.8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+</style>
 </head>
 <body>
 
-<div class="card" id="login-screen">
-  <h2>Attendance System</h2>
-  <div id="https-warning" class="error">
-    ⚠️ CAMERA ERROR: You are not using HTTPS.<br>
-    The camera will NOT work on file:// or http://.<br>
-    Please host this on GitHub Pages.
-  </div>
-
-  <input type="text" id="teacher" placeholder="Teacher Name">
-  <select id="section">
-    <option value="All">All Sections</option>
-    <option value="A">Section A</option>
-    <option value="B">Section B</option>
-  </select>
-  <button onclick="startSession()">START SCANNING</button>
-  <div id="api-error" class="error"></div>
+<!-- LOADER -->
+<div id="loader" class="loader-overlay">
+  <div class="spinner"></div>
+  <p style="margin-top:16px;font-weight:500;color:var(--sub)">Processing...</p>
 </div>
 
-<div class="card" id="scanner-screen" style="display:none;">
-  <h3>Scanning...</h3>
-  <div id="reader"></div>
-  <div id="status">Waiting for camera...</div>
-  <div id="result-msg" class="success"></div>
-  <div id="error-msg" class="error"></div>
-  <button onclick="location.reload()" style="background:#555; margin-top:20px;">Stop / Back</button>
+<!-- SCREEN 1: LOGIN -->
+<div id="screen-login" class="screen active">
+  <div class="login-card">
+    <div class="avatar">S</div>
+    <h2 style="margin-bottom:4px">Attendance Portal</h2>
+    <p style="color:var(--sub);margin-bottom:24px;font-size:14px">Secure Teacher Login</p>
+    
+    <div class="input-group">
+      <label>Teacher Name</label>
+      <input type="text" id="inp-teacher" class="input-field" placeholder="Enter your name">
+    </div>
+    
+    <div class="input-group">
+      <label>Session / Class</label>
+      <select id="inp-section" class="input-field">
+        <option value="All">All Sections</option>
+        <option value="A">Section A</option>
+        <option value="B">Section B</option>
+        <option value="C">Section C</option>
+      </select>
+    </div>
+
+    <button class="btn btn-primary" onclick="startSession()">Start Scanning</button>
+    <p id="https-warn" style="color:var(--red);font-size:12px;margin-top:16px;display:none">⚠️ HTTPS Required for Camera</p>
+  </div>
+</div>
+
+<!-- SCREEN 2: SCANNER -->
+<div id="screen-scanner" class="screen">
+  <div class="scanner-container">
+    <div id="reader"></div>
+    <div class="scan-overlay"></div>
+    
+    <!-- Result Popup -->
+    <div id="res-popup" class="result-popup">
+      <div id="res-icon" class="res-icon">✅</div>
+      <div id="res-title" class="res-title">Present</div>
+      <div id="res-name" class="res-subtitle">Student Name</div>
+      <div class="res-meta">
+        <div>🆔 <b id="res-id">---</b></div>
+        <div>🕒 <span id="res-time">---</span></div>
+      </div>
+    </div>
+
+    <div class="scan-ui">
+      <div class="status-pill" id="scan-status">Searching for QR...</div>
+      <div class="scanner-controls">
+        <button class="btn" onclick="openLog()">📋 Log</button>
+        <button class="btn" style="background:var(--red);border-color:var(--red)" onclick="endSession()">❌ Stop</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN 3: LOG -->
+<div id="screen-log" class="screen">
+  <div class="header">
+    <button class="btn-sm btn-outline" style="color:#fff;border-color:rgba(255,255,255,0.5)" onclick="showScreen('screen-scanner')">← Back</button>
+    <h1>Today's Log</h1>
+    <div style="width:60px"></div>
+  </div>
+  <div class="log-list" id="log-container">
+    <div class="empty-state">No students scanned yet in this session.</div>
+  </div>
 </div>
 
 <script>
-// ⚠️ PASTE YOUR URL HERE BETWEEN THE QUOTES
-const API_URL = "https://script.google.com/macros/s/AKfycbwCN5NhraOcBs2CwZdssWmCgRH49KRW6GE0hsjmlOrKqxOLYVzR7IQCtcTE_RkbV7V8/exec"; 
-const SECRET_KEY = "KKASB1964@Attend#2026!";
+// ⚠️ PASTE YOUR WORKING CREDENTIALS HERE
+const CONFIG = {
+  API_URL: "https://script.google.com/macros/s/AKfycbwCN5NhraOcBs2CwZdssWmCgRH49KRW6GE0hsjmlOrKqxOLYVzR7IQCtcTE_RkbV7V8/exec",
+  SECRET_KEY: "KKASB1964@Attend#2026!"
+};
 
-// 1. Immediate HTTPS Check
-if (location.protocol !== "https:" && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
-  document.getElementById("https-warning").style.display = "block";
-  alert("CRITICAL ERROR:\nYou are opening this file insecurely (file:// or http://).\nThe camera BLOCKS insecure connections.\n\nYou MUST host this on GitHub Pages (https) or similar.");
+// State
+let scanner = null;
+let currentSession = { teacher: "", section: "All", logs: [] };
+let isScanning = true;
+
+// Init
+window.addEventListener("DOMContentLoaded", () => {
+  if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+    document.getElementById('https-warn').style.display = 'block';
+  }
+  
+  // Restore Previous Session
+  const savedTeacher = localStorage.getItem("teacher");
+  if(savedTeacher) document.getElementById("inp-teacher").value = savedTeacher;
+});
+
+// Navigation
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
 }
 
-// 2. Start Session & Test API
+// 1. Start Session
 function startSession() {
-  const teacher = document.getElementById("teacher").value.trim();
-  if(!teacher) return alert("Enter teacher name");
+  const teacher = document.getElementById("inp-teacher").value.trim();
+  const section = document.getElementById("inp-section").value;
+  
+  if(!teacher) return alert("Please enter your name");
+  
+  currentSession.teacher = teacher;
+  currentSession.section = section;
+  localStorage.setItem("teacher", teacher);
 
-  // Check API URL format
-  if(API_URL.includes("YOUR_APPS_SCRIPT") || !API_URL.includes("/exec")) {
-    return alert("SETUP ERROR:\nYou did not paste your Web App URL into the code,\nor you pasted the wrong URL.\n\nIt must end in '/exec'.");
+  // Init Camera
+  showScreen('screen-scanner');
+  initCamera();
+}
+
+// 2. Camera Logic
+function initCamera() {
+  if(scanner) {
+    // If scanner exists, just ensure it's running
+    isScanning = true;
+    return;
   }
 
-  document.getElementById("api-error").style.display = "none";
-  const btn = document.querySelector("button");
-  btn.textContent = "Testing Connection...";
-  btn.disabled = true;
-
-  // Test Connection
-  fetch(API_URL + "?action=ping")
-    .then(res => {
-      if(res.status === 404) throw new Error("404 Not Found (Wrong Deployment URL)");
-      if(!res.ok) throw new Error("HTTP " + res.status);
-      return res.json();
-    })
-    .then(data => {
-      if(data.status !== "ok") throw new Error("Invalid API Response");
-      // API OK - Start Camera
-      startCamera();
-    })
-    .catch(err => {
-      btn.textContent = "START SCANNING";
-      btn.disabled = false;
-      const msg = "CONNECTION FAILED: " + err.message + "\n\n1. Did you deploy as 'Anyone'?\n2. Did you copy the '/exec' URL?";
-      document.getElementById("api-error").innerText = msg;
-      document.getElementById("api-error").style.display = "block";
-      alert(msg);
-    });
-}
-
-// 3. Start Camera
-function startCamera() {
-  document.getElementById("login-screen").style.display = "none";
-  document.getElementById("scanner-screen").style.display = "block";
-
-  const scanner = new Html5Qrcode("reader");
-  const config = { fps: 10, qrbox: 250 };
-
+  scanner = new Html5Qrcode("reader");
+  const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+  
   scanner.start({ facingMode: "environment" }, config, onScanSuccess, onScanError)
+    .then(() => {
+      document.getElementById("scan-status").innerText = "Ready to Scan";
+    })
     .catch(err => {
-      alert("CAMERA FAILED TO START:\n" + err + "\n\nEnsure you are using HTTPS and allowed permissions.");
-      document.getElementById("status").innerText = "Camera Error: " + err;
+      alert("Camera Error: " + err);
+      showScreen('screen-login');
     });
-
-  window.currentScanner = scanner;
 }
 
-// 4. Handle Scan
-let isScanning = true;
+function stopCamera() {
+  if(scanner) {
+    scanner.stop().then(() => {
+      scanner.clear();
+      scanner = null;
+    }).catch(console.error);
+  }
+}
+
+// 3. Scan Handler
 function onScanSuccess(decodedText) {
   if(!isScanning) return;
+  isScanning = false; // Pause scanning
+  
+  // Haptic Feedback
+  if(navigator.vibrate) navigator.vibrate(50);
+
+  // Show Loading State on UI
+  document.getElementById("scan-status").innerText = "Verifying...";
   
   try {
-    // Decrypt
-    const bytes = CryptoJS.AES.decrypt(decodedText, SECRET_KEY);
+    // A. Decrypt
+    const bytes = CryptoJS.AES.decrypt(decodedText, CONFIG.SECRET_KEY);
     const originalText = bytes.toString(CryptoJS.enc.Utf8);
     
-    if(!originalText.includes("|")) throw new Error("Decryption failed");
-
-    const parts = originalText.split("|");
-    const id = parts[0];
-    const name = parts[1];
-
-    isScanning = false;
-    document.getElementById("status").innerText = "Verifying " + name + "...";
+    if(!originalText || !originalText.includes("|")) throw new Error("Invalid QR Data");
     
-    // Call API
-    const teacher = document.getElementById("teacher").value;
-    fetch(API_URL + "?action=scan&id=" + encodeURIComponent(id) + "&teacher=" + encodeURIComponent(teacher))
+    const [id, name, cls, sec] = originalText.split("|");
+
+    // B. Call API
+    const url = `${CONFIG.API_URL}?action=scan&id=${encodeURIComponent(id)}&teacher=${encodeURIComponent(currentSession.teacher)}`;
+    
+    fetch(url)
       .then(res => res.json())
       .then(data => {
-        const div = document.getElementById("result-msg");
-        div.style.display = "block";
-        div.innerText = "✅ " + (data.studentName || name) + ": " + data.attendanceStatus;
-        
-        // Cooldown
-        setTimeout(() => {
-          div.style.display = "none";
-          document.getElementById("status").innerText = "Ready to scan...";
-          isScanning = true;
-        }, 3000);
+        handleScanResult(data, name || data.studentName, id);
       })
       .catch(err => {
-        alert("Network Error: " + err.message);
-        isScanning = true;
+        showPopup("❌", "Error", "Connection Failed", id);
       });
 
-  } catch(e) {
-    console.log("Invalid QR");
+  } catch (e) {
+    showPopup("⚠️", "Invalid", "QR code not recognized", "---");
   }
 }
 
-function onScanError(errorMessage) {
-  // Ignore scan errors, they happen every frame no QR is found
+function onScanError(error) {
+  // Ignore frame errors
+}
+
+// 4. Handle API Result
+function handleScanResult(data, name, id) {
+  let icon = "✅";
+  let title = "Present";
+  let color = "var(--green)";
+  
+  if(data.status === "duplicate") {
+    icon = "🔁";
+    title = "Already Scanned";
+    color = "var(--orange)";
+  } else if(data.attendanceStatus === "Late") {
+    icon = "⏰";
+    title = "Late";
+    color = "var(--red)";
+  } else if(data.status === "not_found") {
+    icon = "❌";
+    title = "Not Found";
+    color = "var(--red)";
+  }
+
+  // Add to local log
+  if(data.status === "success" || data.status === "duplicate") {
+    addToLog(name, id, title, data.time);
+  }
+
+  showPopup(icon, title, name, id, data.time, color);
+}
+
+// 5. Show Popup UI
+function showPopup(icon, title, name, id, time="Now", color) {
+  const popup = document.getElementById("res-popup");
+  
+  document.getElementById("res-icon").innerText = icon;
+  document.getElementById("res-title").innerText = title;
+  document.getElementById("res-title").style.color = color || "var(--text)";
+  document.getElementById("res-name").innerText = name;
+  document.getElementById("res-id").innerText = id;
+  document.getElementById("res-time").innerText = time;
+  
+  popup.classList.add("show");
+
+  // Cooldown timer
+  setTimeout(() => {
+    popup.classList.remove("show");
+    isScanning = true;
+    document.getElementById("scan-status").innerText = "Ready to Scan";
+  }, 2500);
+}
+
+// 6. Logs & Session
+function addToLog(name, id, status, time) {
+  currentSession.logs.unshift({ name, id, status, time });
+  renderLogs();
+}
+
+function renderLogs() {
+  const container = document.getElementById("log-container");
+  if(currentSession.logs.length === 0) return;
+  
+  container.innerHTML = currentSession.logs.map(l => `
+    <div class="log-item">
+      <div class="log-info">
+        <h3>${l.name}</h3>
+        <p>${l.id} • ${l.time}</p>
+      </div>
+      <div class="log-status ${l.status === 'Present' ? 'status-present' : 'status-late'}">
+        ${l.status}
+      </div>
+    </div>
+  `).join('');
+}
+
+function openLog() {
+  showScreen('screen-log');
+  renderLogs();
+}
+
+function endSession() {
+  if(confirm("Stop scanning and logout?")) {
+    stopCamera();
+    showScreen('screen-login');
+    currentSession.logs = [];
+    document.getElementById("log-container").innerHTML = '<div class="empty-state">No students scanned yet.</div>';
+  }
 }
 </script>
 </body>
