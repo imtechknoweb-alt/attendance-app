@@ -751,6 +751,11 @@
     <button class="btn btn-primary" id="startScanBtn" onclick="startSession()">
       📷 Start Scanning
     </button>
+    <!-- ADD THIS BELOW THE START BUTTON -->
+<div class="test-conn-row">
+  <button class="btn-test" id="testConnBtn" onclick="testAPIConnection()">
+    🔌 Test Server Connection
+  </button>
   </div>
 </div>
 
@@ -765,8 +770,17 @@
   <div class="header-sub" id="scannerSubHeader">Teacher: — | Session: —</div>
 
   <div class="scanner-body">
+
+    <!-- QR Reader viewfinder -->
     <div id="qr-reader"></div>
-    <div class="scan-status" id="scanStatus">Initializing camera...</div>
+
+    <!-- Camera fallback (shown if camera fails) -->
+    <div id="cameraFallback">
+      📷<br><br>
+      Camera not started yet.
+    </div>
+
+    <div class="scan-status" id="scanStatus">Initializing...</div>
     <div class="session-count" id="sessionCount">Session scans: 0</div>
 
     <!-- Result Card -->
@@ -789,6 +803,7 @@
         <span id="resTime">—</span>
       </div>
     </div>
+
   </div>
 
   <div class="scanner-bottom-bar">
@@ -1053,32 +1068,94 @@ function initQRScanner() {
   readerEl.innerHTML = "";
 
   if (SESSION.html5QrCode) {
-    try { SESSION.html5QrCode.clear(); } catch (e) {}
-    SESSION.html5QrCode = null;
+    try {
+      SESSION.html5QrCode.stop().then(function () {
+        SESSION.html5QrCode.clear();
+        SESSION.html5QrCode = null;
+        startHtml5Camera();
+      }).catch(function () {
+        SESSION.html5QrCode = null;
+        startHtml5Camera();
+      });
+    } catch (e) {
+      SESSION.html5QrCode = null;
+      startHtml5Camera();
+    }
+  } else {
+    startHtml5Camera();
+  }
+}
+
+function startHtml5Camera() {
+  setScanStatus("Requesting camera access...");
+
+  // Check if browser supports getUserMedia at all
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    setScanStatus("❌ Camera API not supported on this browser.");
+    showCameraFallback("Your browser does not support camera access. Please use Chrome on Android or Safari on iOS.");
+    return;
   }
 
-  SESSION.html5QrCode = new Html5Qrcode("qr-reader");
-  setScanStatus("Starting camera...");
+  SESSION.html5QrCode = new Html5Qrcode("qr-reader", {
+    verbose: false // suppress internal logs
+  });
 
   const config = {
-    fps: 10,
-    qrbox: { width: 240, height: 240 },
+    fps: 8,
+    qrbox: function (viewfinderWidth, viewfinderHeight) {
+      // Responsive qrbox — 75% of the smaller dimension
+      const minDim = Math.min(viewfinderWidth, viewfinderHeight);
+      const size = Math.floor(minDim * 0.75);
+      return { width: size, height: size };
+    },
     aspectRatio: 1.0,
     disableFlip: false,
-    rememberLastUsedCamera: true,
-    formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
+    rememberLastUsedCamera: true
   };
 
+  // Try rear camera first
   SESSION.html5QrCode.start(
-    { facingMode: "environment" }, // rear camera
+    { facingMode: { exact: "environment" } },
     config,
     onQRSuccess,
     onQRError
-  ).then(function () {
+  )
+  .then(function () {
     setScanStatus("📷 Ready to Scan...");
-  }).catch(function (err) {
-    setScanStatus("⚠️ Camera error: " + err);
+    document.getElementById("cameraFallback").style.display = "none";
+  })
+  .catch(function (err) {
+    // Rear camera failed — try any available camera
+    SESSION.html5QrCode.start(
+      { facingMode: "environment" },
+      config,
+      onQRSuccess,
+      onQRError
+    )
+    .then(function () {
+      setScanStatus("📷 Ready to Scan...");
+      document.getElementById("cameraFallback").style.display = "none";
+    })
+    .catch(function (err2) {
+      // All camera attempts failed
+      setScanStatus("⚠️ Camera could not start.");
+      showCameraFallback(
+        "Camera access was denied or is unavailable.<br><br>" +
+        "<strong>To fix:</strong><br>" +
+        "1. Tap the 🔒 lock icon in your browser address bar<br>" +
+        "2. Set Camera permission to <strong>Allow</strong><br>" +
+        "3. Reload this page"
+      );
+    });
   });
+}
+
+function showCameraFallback(message) {
+  const fb = document.getElementById("cameraFallback");
+  if (fb) {
+    fb.innerHTML = "📷<br><br>" + message;
+    fb.style.display = "flex";
+  }
 }
 
 function stopQRScanner() {
@@ -1104,79 +1181,56 @@ function onQRError(errorMsg) {
   }
 }
 
-function onQRSuccess(rawQRData) {
-  // ── COOLDOWN CHECK ────────────────────────────────────
-  if (SESSION.scanCooldown) return;
-  SESSION.scanCooldown = true;
+// ── STEP 4: Send to API with timeout ─────────────────
+setScanStatus("🔄 Verifying student...");
 
-  // ── STEP 1: Attempt CryptoJS AES decryption ──────────
-  let plainText = "";
-  let decryptSuccess = false;
+// Build abort controller for timeout
+const controller = new AbortController();
+const timeoutId = setTimeout(function () {
+  controller.abort();
+}, 10000); // 10 second timeout
 
-  try {
-    const decrypted = CryptoJS.AES.decrypt(rawQRData, CONFIG.SECRET_KEY);
-    plainText = decrypted.toString(CryptoJS.enc.Utf8);
-    if (plainText && plainText.length > 0) {
-      decryptSuccess = true;
-    }
-  } catch (cryptoErr) {
-    decryptSuccess = false;
+const apiUrl = CONFIG.API_URL +
+  "?action=scan" +
+  "&id=" + encodeURIComponent(studentId) +
+  "&teacher=" + encodeURIComponent(SESSION.teacherName);
+
+fetch(apiUrl, {
+  method: "GET",
+  cache: "no-cache",
+  mode: "cors",
+  signal: controller.signal
+})
+.then(function (resp) {
+  clearTimeout(timeoutId);
+  if (!resp.ok) {
+    throw new Error("Server returned HTTP " + resp.status);
+  }
+  return resp.json();
+})
+.then(function (data) {
+  handleScanResponse(data, studentId);
+})
+.catch(function (fetchErr) {
+  clearTimeout(timeoutId);
+  let errMsg = "Connection error";
+  if (fetchErr.name === "AbortError") {
+    errMsg = "Request timed out (10s)";
+  } else if (!navigator.onLine) {
+    errMsg = "No internet connection";
+  } else if (fetchErr.message) {
+    errMsg = fetchErr.message;
   }
 
-  // ── STEP 2: Decryption failed → Invalid Card ─────────
-  if (!decryptSuccess || !plainText) {
-    showResultCard("error", {
-      status: "❌ INVALID CARD",
-      name: "—",
-      id: "—",
-      cls: "—",
-      time: "—"
-    });
-    scheduleReset();
-    return;
-  }
-
-  // ── STEP 3: Extract StudentID from plain text ─────────
-  // Format: "StudentID|Name|Class|Section"
-  const parts = plainText.split("|");
-  if (parts.length < 1 || !parts[0]) {
-    showResultCard("error", {
-      status: "❌ INVALID CARD",
-      name: "—",
-      id: "—",
-      cls: "—",
-      time: "—"
-    });
-    scheduleReset();
-    return;
-  }
-
-  const studentId = parts[0].trim();
-
-  // ── STEP 4: Send to API ───────────────────────────────
-  setScanStatus("🔄 Verifying...");
-
-  const apiUrl = CONFIG.API_URL +
-    "?action=scan" +
-    "&id=" + encodeURIComponent(studentId) +
-    "&teacher=" + encodeURIComponent(SESSION.teacherName);
-
-  fetch(apiUrl, { method: "GET", cache: "no-cache" })
-    .then(function (resp) { return resp.json(); })
-    .then(function (data) {
-      handleScanResponse(data, studentId);
-    })
-    .catch(function (fetchErr) {
-      showResultCard("error", {
-        status: "❌ CONNECTION ERROR",
-        name: "Check internet connection",
-        id: studentId,
-        cls: "—",
-        time: "—"
-      });
-      scheduleReset();
-    });
-}
+  showResultCard("error", {
+    status: "❌ CONNECTION ERROR",
+    name: errMsg,
+    id: studentId,
+    cls: "Check internet & API URL",
+    time: "—"
+  });
+  scheduleReset();
+});
 
 function handleScanResponse(data, scannedId) {
   // ── STEP 5: Show Result Card based on API response ────
@@ -1534,7 +1588,66 @@ document.addEventListener("touchend", function (e) {
     e.preventDefault();
   }
 }, { passive: false });
+
+  //----------------------
+  //TEST API
+  //---------------
+  
+  function testAPIConnection() {
+  const btn = document.getElementById("testConnBtn");
+  if (btn) btn.textContent = "Testing...";
+
+  if (!CONFIG.API_URL || CONFIG.API_URL.includes("YOUR_APPS_SCRIPT")) {
+    alert(
+      "❌ API URL not configured!\n\n" +
+      "You need to replace 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE' " +
+      "in the CONFIG block at the top of the script with your " +
+      "actual deployed Apps Script URL.\n\n" +
+      "It should look like:\n" +
+      "https://script.google.com/macros/s/AKfycb.../exec"
+    );
+    if (btn) btn.textContent = "🔌 Test Connection";
+    return;
+  }
+
+  const testUrl = CONFIG.API_URL + "?action=ping";
+
+  fetch(testUrl, {
+    method: "GET",
+    cache: "no-cache",
+    mode: "cors"
+  })
+  .then(function (resp) {
+    if (!resp.ok) {
+      throw new Error("HTTP " + resp.status + " " + resp.statusText);
+    }
+    return resp.json();
+  })
+  .then(function (data) {
+    if (btn) btn.textContent = "🔌 Test Connection";
+    if (data.status === "ok") {
+      alert("✅ Connection successful!\n\nServer time: " + data.time + "\n\nAPI is working correctly.");
+    } else {
+      alert("⚠️ Server responded but with unexpected data:\n\n" + JSON.stringify(data));
+    }
+  })
+  .catch(function (err) {
+    if (btn) btn.textContent = "🔌 Test Connection";
+    alert(
+      "❌ Connection failed!\n\n" +
+      "Error: " + err.message + "\n\n" +
+      "Possible causes:\n" +
+      "1. API_URL is wrong or not deployed\n" +
+      "2. No internet connection\n" +
+      "3. Apps Script not deployed as 'Anyone' access\n" +
+      "4. Apps Script threw a runtime error\n\n" +
+      "Check: Open this URL in a browser tab:\n" +
+      CONFIG.API_URL + "?action=ping"
+    );
+  });
+}
 </script>
 
 </body>
+
 </html>
