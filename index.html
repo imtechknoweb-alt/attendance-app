@@ -1,0 +1,1540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Attendance System</title>
+
+  <!-- CDN: html5-qrcode for QR camera scanning -->
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
+  <!-- CDN: CryptoJS for AES-256 decryption -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+
+  <style>
+    /* ── RESET & BASE ─────────────────────────────────── */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root {
+      --primary:     #1a73e8;
+      --primary-dk:  #1557b0;
+      --success:     #34a853;
+      --late:        #fb8c00;
+      --duplicate:   #f9ab00;
+      --error:       #ea4335;
+      --bg:          #f8f9fa;
+      --card:        #ffffff;
+      --text:        #202124;
+      --text-muted:  #5f6368;
+      --border:      #dadce0;
+      --radius:      12px;
+      --shadow:      0 2px 12px rgba(0,0,0,0.12);
+      --font:        -apple-system, BlinkMacSystemFont, "Segoe UI",
+                     Roboto, Oxygen, Ubuntu, sans-serif;
+    }
+
+    html, body {
+      height: 100%;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+
+    /* ── SCREENS ──────────────────────────────────────── */
+    .screen {
+      display: none;
+      min-height: 100vh;
+      flex-direction: column;
+      animation: fadeIn 0.25s ease;
+    }
+    .screen.active {
+      display: flex;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── HEADER BAR ───────────────────────────────────── */
+    .header {
+      background: var(--primary);
+      color: #fff;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .header-title {
+      font-size: 17px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 55%;
+    }
+    .header-clock {
+      font-size: 14px;
+      font-weight: 500;
+      opacity: 0.9;
+      white-space: nowrap;
+    }
+    .header-sub {
+      background: var(--primary-dk);
+      color: rgba(255,255,255,0.88);
+      padding: 6px 16px;
+      font-size: 13px;
+      flex-shrink: 0;
+    }
+
+    /* ── LOADING SPINNER ──────────────────────────────── */
+    #loadingOverlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 9999;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+    }
+    #loadingOverlay.visible {
+      display: flex;
+    }
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .spinner-text {
+      color: #fff;
+      font-size: 15px;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* ══════════════════════════════════════════════════
+       SCREEN 1: LOGIN
+    ══════════════════════════════════════════════════ */
+    #screen-login {
+      align-items: center;
+      justify-content: center;
+      padding: 24px 20px;
+      background: var(--bg);
+    }
+
+    .login-card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 32px 24px;
+      width: 100%;
+      max-width: 380px;
+    }
+
+    .school-avatar {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: var(--primary);
+      color: #fff;
+      font-size: 28px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      box-shadow: 0 4px 12px rgba(26,115,232,0.35);
+    }
+
+    .login-school-name {
+      text-align: center;
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+
+    .login-subtitle {
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 28px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-input, .form-select {
+      width: 100%;
+      height: 48px;
+      padding: 0 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-size: 16px;
+      font-family: var(--font);
+      color: var(--text);
+      background: #fff;
+      outline: none;
+      transition: border-color 0.2s;
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    .form-input:focus, .form-select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(26,115,232,0.12);
+    }
+
+    .select-wrapper {
+      position: relative;
+    }
+    .select-wrapper::after {
+      content: "▾";
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      pointer-events: none;
+      font-size: 16px;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      height: 52px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      font-family: var(--font);
+      cursor: pointer;
+      transition: all 0.18s;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(26,115,232,0.35);
+    }
+    .btn-primary:active {
+      background: var(--primary-dk);
+      transform: scale(0.98);
+    }
+    .btn-ghost {
+      background: transparent;
+      color: var(--primary);
+      border: 1.5px solid var(--primary);
+    }
+    .btn-ghost:active {
+      background: rgba(26,115,232,0.08);
+    }
+    .btn-danger {
+      background: var(--error);
+      color: #fff;
+    }
+    .btn-sm {
+      height: 40px;
+      font-size: 14px;
+      padding: 0 16px;
+      width: auto;
+      border-radius: 6px;
+    }
+
+    .form-error {
+      color: var(--error);
+      font-size: 13px;
+      margin-top: 6px;
+      display: none;
+    }
+    .form-error.visible {
+      display: block;
+    }
+
+    /* ══════════════════════════════════════════════════
+       SCREEN 2: SCANNER
+    ══════════════════════════════════════════════════ */
+    #screen-scanner {
+      background: #111;
+      overflow: hidden;
+    }
+
+    #screen-scanner .header {
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(8px);
+    }
+
+    .scanner-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 12px 16px;
+      overflow-y: auto;
+    }
+
+    #qr-reader {
+      width: 100%;
+      max-width: 320px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 3px solid var(--primary);
+      box-shadow: 0 0 0 4px rgba(26,115,232,0.25);
+      background: #000;
+      min-height: 280px;
+    }
+
+    /* Override html5-qrcode default styles */
+    #qr-reader video {
+      border-radius: 8px !important;
+    }
+    #qr-reader img[alt="Info icon"] { display: none !important; }
+    #qr-reader__dashboard_section_csr button {
+      background: var(--primary) !important;
+      color: #fff !important;
+      border: none !important;
+      border-radius: 6px !important;
+      padding: 8px 16px !important;
+      font-size: 14px !important;
+    }
+    #qr-reader__status_span {
+      display: none !important;
+    }
+    #qr-reader__header_message {
+      display: none !important;
+    }
+
+    .scan-status {
+      color: rgba(255,255,255,0.75);
+      font-size: 14px;
+      margin-top: 12px;
+      text-align: center;
+      min-height: 24px;
+    }
+
+    /* ── Result Card ─────────────────────────────────── */
+    .result-card {
+      width: 100%;
+      max-width: 360px;
+      border-radius: var(--radius);
+      padding: 16px;
+      margin-top: 12px;
+      display: none;
+      animation: slideUp 0.2s ease;
+      box-shadow: var(--shadow);
+    }
+    .result-card.visible {
+      display: block;
+    }
+    @keyframes slideUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .result-card.success  { background: #e6f4ea; border-left: 5px solid var(--success); }
+    .result-card.late     { background: #fff3e0; border-left: 5px solid var(--late); }
+    .result-card.duplicate{ background: #fef9e7; border-left: 5px solid var(--duplicate); }
+    .result-card.error    { background: #fce8e6; border-left: 5px solid var(--error); }
+
+    .result-status {
+      font-size: 18px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .result-card.success   .result-status { color: var(--success); }
+    .result-card.late      .result-status { color: var(--late); }
+    .result-card.duplicate .result-status { color: #b45309; }
+    .result-card.error     .result-status { color: var(--error); }
+
+    .result-row {
+      display: flex;
+      font-size: 14px;
+      margin-bottom: 4px;
+      color: var(--text);
+    }
+    .result-label {
+      min-width: 56px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    /* ── Bottom bar ──────────────────────────────────── */
+    .scanner-bottom-bar {
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(8px);
+      padding: 10px 16px;
+      display: flex;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    .scanner-bottom-bar .btn {
+      flex: 1;
+      height: 48px;
+      font-size: 14px;
+    }
+    .btn-log {
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      border: 1.5px solid rgba(255,255,255,0.25);
+    }
+    .btn-end {
+      background: rgba(234,67,53,0.8);
+      color: #fff;
+    }
+
+    /* ── Session count badge ─────────────────────────── */
+    .session-count {
+      background: rgba(255,255,255,0.15);
+      color: #fff;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      text-align: center;
+      margin-top: 8px;
+    }
+
+    /* ══════════════════════════════════════════════════
+       SCREEN 3: TODAY'S LOG
+    ══════════════════════════════════════════════════ */
+    #screen-log {
+      background: var(--bg);
+    }
+
+    .log-toolbar {
+      display: flex;
+      gap: 10px;
+      padding: 12px 16px;
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    .summary-bar {
+      background: var(--primary);
+      color: #fff;
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-around;
+      flex-shrink: 0;
+    }
+    .summary-item {
+      text-align: center;
+    }
+    .summary-count {
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .summary-label {
+      font-size: 11px;
+      opacity: 0.85;
+      margin-top: 2px;
+    }
+
+    .log-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px 24px;
+    }
+
+    .class-group {
+      margin-bottom: 20px;
+    }
+    .class-group-header {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--primary);
+      margin-bottom: 8px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .class-group-count {
+      background: var(--primary);
+      color: #fff;
+      border-radius: 12px;
+      padding: 2px 10px;
+      font-size: 12px;
+    }
+
+    .student-row {
+      background: var(--card);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.07);
+      border-left: 4px solid var(--border);
+      user-select: none;
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+    .student-row:active {
+      transform: scale(0.98);
+    }
+    .student-row.present { border-left-color: var(--success); }
+    .student-row.late    { border-left-color: var(--late); }
+    .student-row.absent  { border-left-color: var(--error); }
+
+    .student-info { flex: 1; }
+    .student-name { font-size: 15px; font-weight: 600; color: var(--text); }
+    .student-meta { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+    .status-badge {
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge-present  { background: #e6f4ea; color: var(--success); }
+    .badge-late     { background: #fff3e0; color: var(--late); }
+    .badge-absent   { background: #fce8e6; color: var(--error); }
+
+    .log-empty {
+      text-align: center;
+      color: var(--text-muted);
+      padding: 48px 24px;
+      font-size: 15px;
+    }
+
+    .open-sheet-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      text-decoration: none;
+      background: var(--success);
+      color: #fff;
+      border-radius: 6px;
+      height: 40px;
+      padding: 0 14px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: var(--font);
+    }
+
+    /* ══════════════════════════════════════════════════
+       SCREEN 4: STUDENT QUICK REPORT
+    ══════════════════════════════════════════════════ */
+    #screen-report {
+      background: var(--bg);
+    }
+
+    .report-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 16px 32px;
+    }
+
+    .report-student-name {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .report-student-meta {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+
+    /* Circular progress */
+    .progress-circle-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .progress-circle {
+      position: relative;
+      width: 130px;
+      height: 130px;
+    }
+    .progress-circle svg {
+      transform: rotate(-90deg);
+    }
+    .progress-circle-bg {
+      fill: none;
+      stroke: var(--border);
+      stroke-width: 10;
+    }
+    .progress-circle-fill {
+      fill: none;
+      stroke: var(--success);
+      stroke-width: 10;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.6s ease;
+    }
+    .progress-circle-text {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .progress-pct {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--text);
+      line-height: 1;
+    }
+    .progress-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .stat-box {
+      background: var(--card);
+      border-radius: 10px;
+      padding: 12px 8px;
+      text-align: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .stat-number {
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .stat-box.present .stat-number { color: var(--success); }
+    .stat-box.late    .stat-number { color: var(--late); }
+    .stat-box.absent  .stat-number { color: var(--error); }
+    .stat-box.total   .stat-number { color: var(--primary); }
+    .stat-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .last7-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+    .last7-dots {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 4px;
+      flex-wrap: wrap;
+    }
+    .day-dot-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .day-dot {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .day-dot.present  { background: var(--success); }
+    .day-dot.late     { background: var(--late); }
+    .day-dot.absent   { background: var(--error); }
+    .day-dot.no-data  { background: var(--border); color: var(--text-muted); }
+    .day-dot-date {
+      font-size: 10px;
+      color: var(--text-muted);
+    }
+
+    /* ── Utility ─────────────────────────────────────── */
+    .mt-8  { margin-top: 8px; }
+    .mt-16 { margin-top: 16px; }
+    .text-center { text-align: center; }
+
+    /* Long press highlight */
+    .student-row:active {
+      background: rgba(26,115,232,0.06);
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     LOADING OVERLAY
+════════════════════════════════════════════ -->
+<div id="loadingOverlay" role="status" aria-live="polite">
+  <div class="spinner"></div>
+  <div class="spinner-text" id="loadingText">Please wait...</div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SCREEN 1: LOGIN
+════════════════════════════════════════════ -->
+<div id="screen-login" class="screen active">
+  <div class="login-card">
+    <div class="school-avatar" id="loginAvatar">S</div>
+    <div class="login-school-name" id="loginSchoolName">Loading...</div>
+    <div class="login-subtitle">Teacher Attendance Portal</div>
+
+    <div class="form-group">
+      <label class="form-label" for="teacherName">Teacher Name</label>
+      <input
+        type="text"
+        id="teacherName"
+        class="form-input"
+        placeholder="Enter your full name"
+        autocomplete="off"
+        autocorrect="off"
+        spellcheck="false"
+        maxlength="60"
+      />
+      <div class="form-error" id="nameError">Please enter your name to continue.</div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label" for="sectionSelect">Session / Section</label>
+      <div class="select-wrapper">
+        <select id="sectionSelect" class="form-select">
+          <!-- Populated by JS from CONFIG.SECTIONS -->
+        </select>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" id="startScanBtn" onclick="startSession()">
+      📷 Start Scanning
+    </button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SCREEN 2: SCANNER
+════════════════════════════════════════════ -->
+<div id="screen-scanner" class="screen">
+  <div class="header">
+    <div class="header-title" id="scannerSchoolName">School</div>
+    <div class="header-clock" id="liveClock">--:-- --</div>
+  </div>
+  <div class="header-sub" id="scannerSubHeader">Teacher: — | Session: —</div>
+
+  <div class="scanner-body">
+    <div id="qr-reader"></div>
+    <div class="scan-status" id="scanStatus">Initializing camera...</div>
+    <div class="session-count" id="sessionCount">Session scans: 0</div>
+
+    <!-- Result Card -->
+    <div class="result-card" id="resultCard">
+      <div class="result-status" id="resultStatus">✅ PRESENT</div>
+      <div class="result-row">
+        <span class="result-label">Name</span>
+        <span id="resName">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">ID</span>
+        <span id="resId">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Class</span>
+        <span id="resClass">—</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Time</span>
+        <span id="resTime">—</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="scanner-bottom-bar">
+    <button class="btn btn-log" onclick="openLogScreen()">📋 Today's Log</button>
+    <button class="btn btn-end" onclick="endSession()">🚪 End Session</button>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SCREEN 3: TODAY'S LOG
+════════════════════════════════════════════ -->
+<div id="screen-log" class="screen">
+  <div class="header">
+    <div class="header-title" id="logDateHeader">Today's Attendance</div>
+    <div></div>
+  </div>
+
+  <div class="log-toolbar">
+    <button class="btn btn-ghost btn-sm" onclick="showScreen('scanner')">
+      🔙 Scanner
+    </button>
+    <a
+      class="open-sheet-btn btn-sm"
+      id="openSheetBtn"
+      href="#"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      🔗 Sheet
+    </a>
+  </div>
+
+  <div class="summary-bar">
+    <div class="summary-item">
+      <div class="summary-count" id="logPresent">0</div>
+      <div class="summary-label">✅ Present</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-count" id="logLate">0</div>
+      <div class="summary-label">⏰ Late</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-count" id="logAbsent">0</div>
+      <div class="summary-label">❌ Absent</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-count" id="logTotal">0</div>
+      <div class="summary-label">📊 Total</div>
+    </div>
+  </div>
+
+  <div class="log-content" id="logContent">
+    <div class="log-empty">Loading attendance data...</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     SCREEN 4: STUDENT QUICK REPORT
+════════════════════════════════════════════ -->
+<div id="screen-report" class="screen">
+  <div class="header">
+    <div class="header-title">Student Report</div>
+    <button
+      class="btn btn-sm"
+      onclick="showScreen('log')"
+      style="background:rgba(255,255,255,0.15);color:#fff;border:none;padding:0 14px;"
+    >
+      ✕ Close
+    </button>
+  </div>
+
+  <div class="report-content" id="reportContent">
+    <div class="log-empty">Loading report...</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     JAVASCRIPT — ALL LOGIC INLINE
+════════════════════════════════════════════ -->
+<script>
+"use strict";
+
+// ─── CONFIGURATION ────────────────────────────────────────
+// Replace these values with your actual configuration.
+const CONFIG = {
+  API_URL: "AKfycbwCN5NhraOcBs2CwZdssWmCgRH49KRW6GE0hsjmlOrKqxOLYVzR7IQCtcTE_RkbV7V8",
+  SECRET_KEY: "KKASB1964@Attend#2026!",
+  SCHOOL_NAME: "KKASB",
+  SCAN_COOLDOWN_MS: 3000,
+  SECTIONS: ["All", "A", "B", "C", "D"],
+  SHEET_URL: "https://docs.google.com/spreadsheets/d/1LrMp3UZlExOjgPPNY0mKS1xoZj1UhOGMIIPCZWRqvMw/edit"
+};
+
+// ─── SESSION STATE ────────────────────────────────────────
+const SESSION = {
+  teacherName: "",
+  section: "All",
+  sessionLog: [],
+  scanCooldown: false,
+  html5QrCode: null,
+  clockInterval: null,
+  scanCount: 0,
+  longPressTimer: null
+};
+
+// ─── INITIALIZATION ───────────────────────────────────────
+window.addEventListener("DOMContentLoaded", function () {
+  initUI();
+});
+
+function initUI() {
+  // Set school name displays
+  document.getElementById("loginSchoolName").textContent = CONFIG.SCHOOL_NAME;
+  document.getElementById("loginAvatar").textContent = CONFIG.SCHOOL_NAME.charAt(0).toUpperCase();
+  document.getElementById("scannerSchoolName").textContent = CONFIG.SCHOOL_NAME;
+
+  // Populate section dropdown
+  const sel = document.getElementById("sectionSelect");
+  sel.innerHTML = "";
+  CONFIG.SECTIONS.forEach(function (sec) {
+    const opt = document.createElement("option");
+    opt.value = sec;
+    opt.textContent = sec === "All" ? "All Sections" : "Section " + sec;
+    sel.appendChild(opt);
+  });
+
+  // Restore saved session values
+  const savedTeacher = sessionStorage.getItem("att_teacher") || "";
+  const savedSection = sessionStorage.getItem("att_section") || "All";
+  document.getElementById("teacherName").value = savedTeacher;
+  sel.value = savedSection;
+
+  // Set Google Sheet URL
+  document.getElementById("openSheetBtn").href = CONFIG.SHEET_URL;
+}
+
+// ─── SCREEN NAVIGATION ────────────────────────────────────
+function showScreen(screenName) {
+  document.querySelectorAll(".screen").forEach(function (s) {
+    s.classList.remove("active");
+  });
+
+  const target = document.getElementById("screen-" + screenName);
+  if (target) target.classList.add("active");
+
+  if (screenName === "scanner") {
+    startClockTick();
+  } else {
+    stopClockTick();
+  }
+}
+
+// ─── LOADING OVERLAY ──────────────────────────────────────
+function showLoading(text) {
+  document.getElementById("loadingText").textContent = text || "Please wait...";
+  document.getElementById("loadingOverlay").classList.add("visible");
+}
+function hideLoading() {
+  document.getElementById("loadingOverlay").classList.remove("visible");
+}
+
+// ─── LIVE CLOCK ───────────────────────────────────────────
+function startClockTick() {
+  if (SESSION.clockInterval) return;
+  updateClock();
+  SESSION.clockInterval = setInterval(updateClock, 1000);
+}
+function stopClockTick() {
+  if (SESSION.clockInterval) {
+    clearInterval(SESSION.clockInterval);
+    SESSION.clockInterval = null;
+  }
+}
+function updateClock() {
+  const now = new Date();
+  const h = now.getHours();
+  const m = now.getMinutes();
+  const s = now.getSeconds();
+  const ampm = h >= 12 ? "PM" : "AM";
+  const hh = h % 12 || 12;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(s).padStart(2, "0");
+  const el = document.getElementById("liveClock");
+  if (el) el.textContent = hh + ":" + mm + ":" + ss + " " + ampm;
+}
+
+// ─── FORMAT DATE ──────────────────────────────────────────
+function formatTodayDate() {
+  const now = new Date();
+  const d = String(now.getDate()).padStart(2, "0");
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const y = now.getFullYear();
+  return d + "/" + m + "/" + y;
+}
+
+function formatDateDisplay(ddmmyyyy) {
+  if (!ddmmyyyy) return "";
+  const p = ddmmyyyy.split("/");
+  if (p.length !== 3) return ddmmyyyy;
+  const months = ["Jan","Feb","Mar","Apr","May","Jun",
+                  "Jul","Aug","Sep","Oct","Nov","Dec"];
+  return p[0] + " " + months[parseInt(p[1]) - 1] + " " + p[2];
+}
+
+// ═══════════════════════════════════════════════════════
+// SCREEN 1 LOGIC: SESSION SETUP
+// ═══════════════════════════════════════════════════════
+
+function startSession() {
+  const nameInput = document.getElementById("teacherName");
+  const nameError = document.getElementById("nameError");
+  const name = nameInput.value.trim();
+
+  if (!name) {
+    nameError.classList.add("visible");
+    nameInput.focus();
+    return;
+  }
+  nameError.classList.remove("visible");
+
+  SESSION.teacherName = name;
+  SESSION.section = document.getElementById("sectionSelect").value;
+  SESSION.sessionLog = [];
+  SESSION.scanCount = 0;
+
+  // Persist to sessionStorage
+  sessionStorage.setItem("att_teacher", name);
+  sessionStorage.setItem("att_section", SESSION.section);
+
+  // Update scanner sub-header
+  document.getElementById("scannerSubHeader").textContent =
+    "Teacher: " + name + " | Session: " +
+    (SESSION.section === "All" ? "All Sections" : "Section " + SESSION.section);
+
+  showScreen("scanner");
+  startClockTick();
+
+  // Initialize QR scanner with slight delay to allow screen transition
+  setTimeout(initQRScanner, 300);
+}
+
+function endSession() {
+  if (SESSION.sessionLog.length > 0) {
+    const confirm = window.confirm(
+      "End scanning session?\n\n" +
+      SESSION.sessionLog.length + " student(s) marked in this session."
+    );
+    if (!confirm) return;
+  }
+  stopQRScanner();
+  SESSION.sessionLog = [];
+  SESSION.scanCount = 0;
+  showScreen("login");
+}
+
+// ═══════════════════════════════════════════════════════
+// SCREEN 2 LOGIC: QR SCANNER
+// ═══════════════════════════════════════════════════════
+
+function initQRScanner() {
+  const readerEl = document.getElementById("qr-reader");
+  readerEl.innerHTML = "";
+
+  if (SESSION.html5QrCode) {
+    try { SESSION.html5QrCode.clear(); } catch (e) {}
+    SESSION.html5QrCode = null;
+  }
+
+  SESSION.html5QrCode = new Html5Qrcode("qr-reader");
+  setScanStatus("Starting camera...");
+
+  const config = {
+    fps: 10,
+    qrbox: { width: 240, height: 240 },
+    aspectRatio: 1.0,
+    disableFlip: false,
+    rememberLastUsedCamera: true,
+    formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE]
+  };
+
+  SESSION.html5QrCode.start(
+    { facingMode: "environment" }, // rear camera
+    config,
+    onQRSuccess,
+    onQRError
+  ).then(function () {
+    setScanStatus("📷 Ready to Scan...");
+  }).catch(function (err) {
+    setScanStatus("⚠️ Camera error: " + err);
+  });
+}
+
+function stopQRScanner() {
+  if (SESSION.html5QrCode) {
+    try {
+      SESSION.html5QrCode.stop().catch(function () {});
+    } catch (e) {}
+    SESSION.html5QrCode = null;
+  }
+}
+
+function setScanStatus(text) {
+  const el = document.getElementById("scanStatus");
+  if (el) el.textContent = text;
+}
+
+function onQRError(errorMsg) {
+  // Suppress routine "QR code not found" errors to avoid console spam
+  // These are expected while camera is scanning but no QR is visible.
+  // Only log non-routine errors.
+  if (errorMsg && !errorMsg.includes("No QR") && !errorMsg.includes("No barcode")) {
+    // Silently ignore — do not log SECRET_KEY or QR data
+  }
+}
+
+function onQRSuccess(rawQRData) {
+  // ── COOLDOWN CHECK ────────────────────────────────────
+  if (SESSION.scanCooldown) return;
+  SESSION.scanCooldown = true;
+
+  // ── STEP 1: Attempt CryptoJS AES decryption ──────────
+  let plainText = "";
+  let decryptSuccess = false;
+
+  try {
+    const decrypted = CryptoJS.AES.decrypt(rawQRData, CONFIG.SECRET_KEY);
+    plainText = decrypted.toString(CryptoJS.enc.Utf8);
+    if (plainText && plainText.length > 0) {
+      decryptSuccess = true;
+    }
+  } catch (cryptoErr) {
+    decryptSuccess = false;
+  }
+
+  // ── STEP 2: Decryption failed → Invalid Card ─────────
+  if (!decryptSuccess || !plainText) {
+    showResultCard("error", {
+      status: "❌ INVALID CARD",
+      name: "—",
+      id: "—",
+      cls: "—",
+      time: "—"
+    });
+    scheduleReset();
+    return;
+  }
+
+  // ── STEP 3: Extract StudentID from plain text ─────────
+  // Format: "StudentID|Name|Class|Section"
+  const parts = plainText.split("|");
+  if (parts.length < 1 || !parts[0]) {
+    showResultCard("error", {
+      status: "❌ INVALID CARD",
+      name: "—",
+      id: "—",
+      cls: "—",
+      time: "—"
+    });
+    scheduleReset();
+    return;
+  }
+
+  const studentId = parts[0].trim();
+
+  // ── STEP 4: Send to API ───────────────────────────────
+  setScanStatus("🔄 Verifying...");
+
+  const apiUrl = CONFIG.API_URL +
+    "?action=scan" +
+    "&id=" + encodeURIComponent(studentId) +
+    "&teacher=" + encodeURIComponent(SESSION.teacherName);
+
+  fetch(apiUrl, { method: "GET", cache: "no-cache" })
+    .then(function (resp) { return resp.json(); })
+    .then(function (data) {
+      handleScanResponse(data, studentId);
+    })
+    .catch(function (fetchErr) {
+      showResultCard("error", {
+        status: "❌ CONNECTION ERROR",
+        name: "Check internet connection",
+        id: studentId,
+        cls: "—",
+        time: "—"
+      });
+      scheduleReset();
+    });
+}
+
+function handleScanResponse(data, scannedId) {
+  // ── STEP 5: Show Result Card based on API response ────
+  let cardType = "error";
+  let statusText = "❌ UNKNOWN";
+  let name = "—";
+  let cls = "—";
+  let time = "—";
+
+  if (data.status === "success") {
+    cardType = data.attendanceStatus === "Late" ? "late" : "success";
+    statusText = data.attendanceStatus === "Late" ? "⏰ LATE" : "✅ PRESENT";
+    name = data.studentName || "—";
+    cls = "Class " + (data.studentClass || "—") + " — Section " + (data.studentSection || "—");
+    time = data.time || "—";
+
+    // ── STEP 7: Vibrate on success ────────────────────
+    if (navigator.vibrate) {
+      navigator.vibrate([100, 50, 100]);
+    }
+
+    // ── STEP 8: Add to local session log ──────────────
+    SESSION.sessionLog.push({
+      id: scannedId,
+      name: name,
+      studentClass: data.studentClass,
+      section: data.studentSection,
+      status: data.attendanceStatus,
+      time: time
+    });
+    SESSION.scanCount++;
+    document.getElementById("sessionCount").textContent =
+      "Session scans: " + SESSION.scanCount;
+
+  } else if (data.status === "duplicate") {
+    cardType = "duplicate";
+    statusText = "🔁 ALREADY MARKED";
+    name = data.studentName || "—";
+    cls = "Class " + (data.studentClass || "—") + " — Section " + (data.studentSection || "—");
+    time = data.time || "—";
+
+    if (navigator.vibrate) navigator.vibrate([50]);
+
+  } else if (data.status === "not_found") {
+    cardType = "error";
+    statusText = "❌ NOT FOUND";
+    name = "Student not in system";
+    cls = "—";
+    time = "—";
+
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+
+  } else {
+    cardType = "error";
+    statusText = "❌ ERROR";
+    name = data.message || "Unknown error";
+    cls = "—";
+    time = "—";
+  }
+
+  showResultCard(cardType, { status: statusText, name, id: scannedId, cls, time });
+  scheduleReset();
+}
+
+function showResultCard(type, info) {
+  const card = document.getElementById("resultCard");
+  card.className = "result-card " + type + " visible";
+  document.getElementById("resultStatus").textContent = info.status;
+  document.getElementById("resName").textContent = info.name;
+  document.getElementById("resId").textContent = info.id;
+  document.getElementById("resClass").textContent = info.cls;
+  document.getElementById("resTime").textContent = info.time;
+  setScanStatus(info.status);
+}
+
+function scheduleReset() {
+  // ── STEP 6: 3-second cooldown then reactivate ─────────
+  setTimeout(function () {
+    const card = document.getElementById("resultCard");
+    card.classList.remove("visible");
+    setScanStatus("📷 Ready to Scan...");
+    SESSION.scanCooldown = false;
+  }, CONFIG.SCAN_COOLDOWN_MS);
+}
+
+// ═══════════════════════════════════════════════════════
+// SCREEN 3 LOGIC: TODAY'S LOG
+// ═══════════════════════════════════════════════════════
+
+function openLogScreen() {
+  showScreen("log");
+
+  // Update date header
+  const today = formatTodayDate();
+  document.getElementById("logDateHeader").textContent =
+    "Today's Attendance — " + formatDateDisplay(today);
+
+  loadTodayLog(today);
+}
+
+function loadTodayLog(date) {
+  showLoading("Loading attendance...");
+
+  const apiUrl = CONFIG.API_URL +
+    "?action=getSummary" +
+    "&date=" + encodeURIComponent(date || formatTodayDate());
+
+  fetch(apiUrl, { method: "GET", cache: "no-cache" })
+    .then(function (resp) { return resp.json(); })
+    .then(function (data) {
+      hideLoading();
+      renderLogScreen(data);
+    })
+    .catch(function () {
+      hideLoading();
+      document.getElementById("logContent").innerHTML =
+        '<div class="log-empty">⚠️ Could not load data. Check your connection.</div>';
+    });
+}
+
+function renderLogScreen(data) {
+  const logContent = document.getElementById("logContent");
+
+  if (!data || data.status !== "success" || !data.groups) {
+    logContent.innerHTML = '<div class="log-empty">No attendance data for today.</div>';
+    document.getElementById("logPresent").textContent = "0";
+    document.getElementById("logLate").textContent = "0";
+    document.getElementById("logAbsent").textContent = "0";
+    document.getElementById("logTotal").textContent = "0";
+    return;
+  }
+
+  let totalPresent = 0, totalLate = 0, totalAbsent = 0, totalAll = 0;
+  let html = "";
+
+  data.groups.forEach(function (group) {
+    const groupStudents = group.students || [];
+    totalPresent += group.present;
+    totalLate += group.late;
+    totalAbsent += group.absent;
+    totalAll += group.total;
+
+    html += '<div class="class-group">';
+    html += '<div class="class-group-header">';
+    html += "Class " + escHtml(group.studentClass) + " — Section " + escHtml(group.section);
+    html += ' <span class="class-group-count">' + groupStudents.length + '</span>';
+    html += "</div>";
+
+    groupStudents.forEach(function (stu) {
+      const statusClass = stu.status.toLowerCase();
+      const badgeClass = "badge-" + statusClass;
+      const stuId = stu.id || "—";
+      const stuName = stu.name || "—";
+      const stuTime = stu.time || "—";
+      const stuStatus = stu.status || "—";
+
+      html += '<div class="student-row ' + statusClass + '"';
+      html += ' data-studentid="' + escAttr(stuId) + '"';
+      html += ' onmousedown="startLongPress(\'' + escAttr(stuId) + '\')"';
+      html += ' onmouseup="cancelLongPress()"';
+      html += ' ontouchstart="startLongPress(\'' + escAttr(stuId) + '\')"';
+      html += ' ontouchend="cancelLongPress()"';
+      html += ' ontouchmove="cancelLongPress()"';
+      html += '>';
+      html += '<div class="student-info">';
+      html += '<div class="student-name">' + escHtml(stuName) + "</div>";
+      html += '<div class="student-meta">' + escHtml(stuId) + " • " + escHtml(stuTime) + "</div>";
+      html += "</div>";
+      html += '<span class="status-badge ' + badgeClass + '">' + escHtml(stuStatus) + "</span>";
+      html += "</div>";
+    });
+
+    html += "</div>"; // end class-group
+  });
+
+  if (!html) {
+    html = '<div class="log-empty">No students found for today.</div>';
+  }
+
+  logContent.innerHTML = html;
+
+  // Update summary counts
+  document.getElementById("logPresent").textContent = totalPresent;
+  document.getElementById("logLate").textContent = totalLate;
+  document.getElementById("logAbsent").textContent = totalAbsent;
+  document.getElementById("logTotal").textContent = totalAll;
+}
+
+// Long press detection for student report trigger
+function startLongPress(studentId) {
+  cancelLongPress();
+  SESSION.longPressTimer = setTimeout(function () {
+    SESSION.longPressTimer = null;
+    openStudentReport(studentId);
+  }, 600);
+}
+function cancelLongPress() {
+  if (SESSION.longPressTimer) {
+    clearTimeout(SESSION.longPressTimer);
+    SESSION.longPressTimer = null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// SCREEN 4 LOGIC: STUDENT QUICK REPORT
+// ═══════════════════════════════════════════════════════
+
+function openStudentReport(studentId) {
+  showScreen("report");
+  loadStudentReport(studentId);
+}
+
+function loadStudentReport(studentId) {
+  const reportContent = document.getElementById("reportContent");
+  reportContent.innerHTML = '<div class="log-empty">Loading...</div>';
+  showLoading("Loading student report...");
+
+  const apiUrl = CONFIG.API_URL +
+    "?action=getReport" +
+    "&id=" + encodeURIComponent(studentId);
+
+  fetch(apiUrl, { method: "GET", cache: "no-cache" })
+    .then(function (resp) { return resp.json(); })
+    .then(function (data) {
+      hideLoading();
+      renderStudentReport(data);
+    })
+    .catch(function () {
+      hideLoading();
+      reportContent.innerHTML =
+        '<div class="log-empty">⚠️ Could not load report. Check connection.</div>';
+    });
+}
+
+function renderStudentReport(data) {
+  const content = document.getElementById("reportContent");
+
+  if (!data || data.status !== "success") {
+    content.innerHTML =
+      '<div class="log-empty">Student report not available.</div>';
+    return;
+  }
+
+  const stu = data.student || {};
+  const stats = data.stats || {};
+  const last7 = data.last7Days || [];
+  const pct = parseFloat(stats.attendancePercent) || 0;
+
+  // Circular progress calculations
+  const radius = 54;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference - (pct / 100) * circumference;
+
+  // Stroke color based on percentage
+  let strokeColor = "#34a853"; // green
+  if (pct < 75) strokeColor = "#ea4335";
+  else if (pct < 85) strokeColor = "#fb8c00";
+
+  // Last 7 days dots
+  let dotsHtml = "";
+  last7.forEach(function (day) {
+    const s = (day.status || "No Data").toLowerCase().replace(" ", "-");
+    let dotClass = "no-data";
+    let dotText = "—";
+    if (day.status === "Present") { dotClass = "present"; dotText = "P"; }
+    else if (day.status === "Late") { dotClass = "late"; dotText = "L"; }
+    else if (day.status === "Absent") { dotClass = "absent"; dotText = "A"; }
+
+    const dateShort = day.date ? day.date.substring(0, 5) : "—";
+    dotsHtml += '<div class="day-dot-wrap">';
+    dotsHtml += '<div class="day-dot ' + dotClass + '">' + dotText + "</div>";
+    dotsHtml += '<div class="day-dot-date">' + escHtml(dateShort) + "</div>";
+    dotsHtml += "</div>";
+  });
+
+  content.innerHTML = `
+    <div class="report-student-name">${escHtml(stu.name || "—")}</div>
+    <div class="report-student-meta">
+      ${escHtml(stu.id || "—")} &nbsp;|&nbsp;
+      Class ${escHtml(stu.studentClass || "—")} — Section ${escHtml(stu.section || "—")}
+    </div>
+
+    <div class="progress-circle-wrap">
+      <div class="progress-circle">
+        <svg viewBox="0 0 130 130" width="130" height="130">
+          <circle class="progress-circle-bg" cx="65" cy="65" r="${radius}"/>
+          <circle
+            class="progress-circle-fill"
+            cx="65" cy="65" r="${radius}"
+            stroke="${strokeColor}"
+            stroke-dasharray="${circumference}"
+            stroke-dashoffset="${dashOffset}"
+          />
+        </svg>
+        <div class="progress-circle-text">
+          <div class="progress-pct">${pct.toFixed(1)}%</div>
+          <div class="progress-label">Attendance</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-box present">
+        <div class="stat-number">${stats.present || 0}</div>
+        <div class="stat-label">Present</div>
+      </div>
+      <div class="stat-box late">
+        <div class="stat-number">${stats.late || 0}</div>
+        <div class="stat-label">Late</div>
+      </div>
+      <div class="stat-box absent">
+        <div class="stat-number">${stats.absent || 0}</div>
+        <div class="stat-label">Absent</div>
+      </div>
+      <div class="stat-box total">
+        <div class="stat-number">${stats.totalDays || 0}</div>
+        <div class="stat-label">Total Days</div>
+      </div>
+    </div>
+
+    <div class="last7-title">Last 7 Days</div>
+    <div class="last7-dots">
+      ${dotsHtml || '<span style="color:var(--text-muted);font-size:13px;">No recent records</span>'}
+    </div>
+  `;
+}
+
+// ─── SECURITY HELPERS ─────────────────────────────────────
+// Escape HTML to prevent XSS in dynamically built HTML
+function escHtml(str) {
+  if (!str) return "";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+function escAttr(str) {
+  if (!str) return "";
+  return String(str).replace(/'/g, "\\'").replace(/"/g, "&quot;");
+}
+
+// ─── PREVENT ACCIDENTAL NAVIGATION ───────────────────────
+window.addEventListener("beforeunload", function (e) {
+  if (SESSION.scanCount > 0) {
+    e.preventDefault();
+    e.returnValue = "You have an active scanning session. Are you sure you want to leave?";
+  }
+});
+
+// ─── PREVENT DOUBLE-TAP ZOOM ON BUTTONS ──────────────────
+document.addEventListener("touchend", function (e) {
+  if (e.target.tagName === "BUTTON") {
+    e.preventDefault();
+  }
+}, { passive: false });
+</script>
+
+</body>
+</html>
