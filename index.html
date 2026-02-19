@@ -1,1082 +1,164 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0,
-        maximum-scale=1.0, user-scalable=no"/>
-  <meta name="mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <title>Attendance System</title>
-
-  <!-- html5-qrcode — QR camera scanning -->
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendance Diagnostic</title>
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <!-- CryptoJS — AES-256 decryption -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
-
-<style>
-/* ── RESET ────────────────────────────────────────────── */
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;
-  -webkit-tap-highlight-color:transparent}
-:root{
-  --blue:   #1a73e8;
-  --bludk:  #1557b0;
-  --green:  #34a853;
-  --orange: #fb8c00;
-  --yellow: #f9ab00;
-  --red:    #ea4335;
-  --bg:     #f0f4f8;
-  --card:   #ffffff;
-  --txt:    #202124;
-  --muted:  #5f6368;
-  --border: #dadce0;
-  --rad:    14px;
-  --shad:   0 2px 16px rgba(0,0,0,0.13);
-  --font:   -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif
-}
-html,body{height:100%;font-family:var(--font);background:var(--bg);
-  color:var(--txt);font-size:16px;line-height:1.5;overflow-x:hidden}
-
-/* ── SCREENS ──────────────────────────────────────────── */
-.screen{display:none;min-height:100vh;flex-direction:column}
-.screen.active{display:flex;animation:fadeIn .22s ease}
-@keyframes fadeIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
-
-/* ── HEADER ───────────────────────────────────────────── */
-.hdr{background:var(--blue);color:#fff;padding:13px 16px;
-  display:flex;align-items:center;justify-content:space-between;
-  flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,.22)}
-.hdr-title{font-size:17px;font-weight:700;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:58%}
-.hdr-right{font-size:13px;font-weight:500;opacity:.92;white-space:nowrap}
-.hdr-sub{background:var(--bludk);color:rgba(255,255,255,.88);
-  padding:6px 16px;font-size:13px;flex-shrink:0}
-
-/* ── LOADING OVERLAY ──────────────────────────────────── */
-#overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.48);
-  z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:14px}
-#overlay.on{display:flex}
-.spin{width:46px;height:46px;border:4px solid rgba(255,255,255,.3);
-  border-top-color:#fff;border-radius:50%;animation:spin .75s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-.spin-txt{color:#fff;font-size:15px}
-
-/* ── BUTTONS ──────────────────────────────────────────── */
-.btn{display:flex;align-items:center;justify-content:center;gap:7px;
-  width:100%;height:52px;border:none;border-radius:10px;font-size:16px;
-  font-weight:600;font-family:var(--font);cursor:pointer;
-  transition:all .16s;text-decoration:none;-webkit-appearance:none}
-.btn:active{transform:scale(.97)}
-.btn-blue{background:var(--blue);color:#fff;
-  box-shadow:0 2px 10px rgba(26,115,232,.38)}
-.btn-blue:active{background:var(--bludk)}
-.btn-ghost{background:transparent;color:var(--blue);
-  border:1.5px solid var(--blue)}
-.btn-ghost:active{background:rgba(26,115,232,.08)}
-.btn-red{background:var(--red);color:#fff}
-.btn-sm{height:40px;font-size:14px;padding:0 16px;
-  width:auto;border-radius:8px}
-
-/* ══════════════════════════════════════════════════════
-   SCREEN 1 — LOGIN
-══════════════════════════════════════════════════════ */
-#s-login{align-items:center;justify-content:center;
-  padding:28px 18px;background:var(--bg)}
-.login-card{background:var(--card);border-radius:var(--rad);
-  box-shadow:var(--shad);padding:32px 24px;width:100%;max-width:390px}
-.avatar{width:74px;height:74px;border-radius:50%;background:var(--blue);
-  color:#fff;font-size:30px;font-weight:700;display:flex;
-  align-items:center;justify-content:center;margin:0 auto 14px;
-  box-shadow:0 4px 14px rgba(26,115,232,.38)}
-.school-nm{text-align:center;font-size:19px;font-weight:700;margin-bottom:3px}
-.school-sub{text-align:center;font-size:13px;color:var(--muted);margin-bottom:26px}
-.lbl{display:block;font-size:12px;font-weight:700;color:var(--muted);
-  margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
-.inp,.sel{width:100%;height:50px;padding:0 14px;border:1.5px solid var(--border);
-  border-radius:9px;font-size:16px;font-family:var(--font);color:var(--txt);
-  background:#fff;outline:none;transition:border-color .18s;
-  appearance:none;-webkit-appearance:none}
-.inp:focus,.sel:focus{border-color:var(--blue);
-  box-shadow:0 0 0 3px rgba(26,115,232,.13)}
-.sel-wrap{position:relative}
-.sel-wrap::after{content:"▾";position:absolute;right:14px;top:50%;
-  transform:translateY(-50%);color:var(--muted);pointer-events:none}
-.fg{margin-bottom:20px}
-.err-msg{color:var(--red);font-size:13px;margin-top:5px;display:none}
-.err-msg.on{display:block}
-.test-row{margin-top:11px;text-align:center}
-.btn-test{background:transparent;color:var(--muted);
-  border:1px solid var(--border);font-size:13px;height:38px;
-  border-radius:7px;padding:0 16px;cursor:pointer;font-family:var(--font)}
-.conn-status{margin-top:10px;padding:10px 14px;border-radius:8px;
-  font-size:13px;display:none;text-align:center;line-height:1.5}
-.conn-status.ok{display:block;background:#e6f4ea;color:#137333;border:1px solid #b7dfbf}
-.conn-status.fail{display:block;background:#fce8e6;color:#c62828;border:1px solid #f5c6c4}
-
-/* ══════════════════════════════════════════════════════
-   SCREEN 2 — SCANNER
-══════════════════════════════════════════════════════ */
-#s-scanner{background:#111;overflow:hidden}
-#s-scanner .hdr{background:rgba(0,0,0,.72);backdrop-filter:blur(10px);
-  -webkit-backdrop-filter:blur(10px)}
-#s-scanner .hdr-sub{background:rgba(0,0,0,.55)}
-
-.scan-body{flex:1;display:flex;flex-direction:column;align-items:center;
-  padding:14px 16px 10px;overflow-y:auto;-webkit-overflow-scrolling:touch}
-
-/* QR reader container */
-#qr-box{width:100%;max-width:310px;border-radius:14px;overflow:hidden;
-  border:3px solid var(--blue);
-  box-shadow:0 0 0 5px rgba(26,115,232,.22);
-  background:#1a1a1a;min-height:290px;position:relative}
-
-/* Camera blocked / fallback panel */
-#cam-fallback{display:none;flex-direction:column;align-items:center;
-  justify-content:center;text-align:center;padding:28px 18px;
-  color:rgba(255,255,255,.78);font-size:14px;line-height:1.75;
-  min-height:260px;width:100%;max-width:310px;
-  background:#1c1c1c;border-radius:14px;
-  border:2px dashed rgba(255,255,255,.18)}
-#cam-fallback.on{display:flex}
-
-/* Suppress html5-qrcode UI clutter */
-#qr-box video{border-radius:10px !important;width:100% !important}
-#qr-box img[alt="Info icon"]{display:none !important}
-#qr-box__header_message,
-#qr-box__status_span,
-#qr-box__filescan_input,
-#qr-box__dashboard_section_swaplink{display:none !important}
-#qr-box__dashboard_section_csr button{
-  background:var(--blue) !important;color:#fff !important;
-  border:none !important;border-radius:8px !important;
-  padding:10px 22px !important;font-size:15px !important;
-  font-family:var(--font) !important;margin-top:10px !important;
-  cursor:pointer !important}
-
-.scan-status{color:rgba(255,255,255,.82);font-size:14px;
-  margin-top:11px;text-align:center;min-height:22px}
-.scan-count{background:rgba(255,255,255,.1);color:rgba(255,255,255,.78);
-  padding:4px 14px;border-radius:20px;font-size:12px;
-  text-align:center;margin-top:7px}
-
-/* Result card */
-.res-card{width:100%;max-width:360px;border-radius:var(--rad);
-  padding:16px 18px;margin-top:13px;display:none;
-  animation:slideUp .2s ease;box-shadow:var(--shad)}
-.res-card.on{display:block}
-@keyframes slideUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.res-card.ok   {background:#e6f4ea;border-left:5px solid var(--green)}
-.res-card.late {background:#fff3e0;border-left:5px solid var(--orange)}
-.res-card.dup  {background:#fef9e7;border-left:5px solid var(--yellow)}
-.res-card.err  {background:#fce8e6;border-left:5px solid var(--red)}
-.res-title{font-size:18px;font-weight:700;margin-bottom:10px;
-  display:flex;align-items:center;gap:8px}
-.res-card.ok   .res-title{color:var(--green)}
-.res-card.late .res-title{color:var(--orange)}
-.res-card.dup  .res-title{color:#b45309}
-.res-card.err  .res-title{color:var(--red)}
-.res-row{display:flex;font-size:14px;margin-bottom:5px}
-.res-lbl{min-width:58px;font-weight:600;color:var(--muted)}
-
-/* Scanner bottom bar */
-.scan-bar{background:rgba(0,0,0,.82);backdrop-filter:blur(10px);
-  -webkit-backdrop-filter:blur(10px);
-  padding:10px 16px;
-  padding-bottom:max(10px,env(safe-area-inset-bottom));
-  display:flex;gap:12px;flex-shrink:0}
-.scan-bar .btn{flex:1;height:50px;font-size:14px}
-.btn-log{background:rgba(255,255,255,.12);color:#fff;
-  border:1.5px solid rgba(255,255,255,.28);border-radius:9px}
-.btn-end{background:rgba(234,67,53,.88);color:#fff;border-radius:9px}
-
-/* ══════════════════════════════════════════════════════
-   SCREEN 3 — LOG
-══════════════════════════════════════════════════════ */
-#s-log{background:var(--bg)}
-.log-toolbar{display:flex;gap:10px;align-items:center;
-  padding:11px 16px;background:var(--card);
-  border-bottom:1px solid var(--border);flex-shrink:0}
-.open-sheet{display:flex;align-items:center;justify-content:center;gap:5px;
-  text-decoration:none;background:var(--green);color:#fff;
-  border-radius:8px;height:40px;padding:0 14px;
-  font-size:14px;font-weight:600;font-family:var(--font)}
-.sum-bar{background:var(--blue);color:#fff;padding:10px 16px;
-  display:flex;justify-content:space-around;flex-shrink:0}
-.sum-item{text-align:center}
-.sum-num{font-size:22px;font-weight:700;line-height:1}
-.sum-lbl{font-size:11px;opacity:.85;margin-top:2px}
-.log-body{flex:1;overflow-y:auto;padding:12px 16px 28px;
-  -webkit-overflow-scrolling:touch}
-.cls-grp{margin-bottom:22px}
-.cls-hdr{font-size:14px;font-weight:700;color:var(--blue);
-  margin-bottom:8px;padding-bottom:6px;
-  border-bottom:2px solid var(--blue);
-  display:flex;align-items:center;justify-content:space-between}
-.cls-cnt{background:var(--blue);color:#fff;border-radius:12px;
-  padding:2px 10px;font-size:12px}
-.stu-row{background:var(--card);border-radius:9px;padding:10px 14px;
-  margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;
-  box-shadow:0 1px 5px rgba(0,0,0,.07);border-left:4px solid var(--border);
-  user-select:none;cursor:pointer;transition:transform .1s}
-.stu-row:active{transform:scale(.98);background:#f5f5f5}
-.stu-row.present{border-left-color:var(--green)}
-.stu-row.late   {border-left-color:var(--orange)}
-.stu-row.absent {border-left-color:var(--red)}
-.stu-nm{font-size:15px;font-weight:600}
-.stu-meta{font-size:12px;color:var(--muted);margin-top:2px}
-.badge{padding:4px 10px;border-radius:20px;font-size:12px;
-  font-weight:600;white-space:nowrap}
-.b-present{background:#e6f4ea;color:var(--green)}
-.b-late   {background:#fff3e0;color:var(--orange)}
-.b-absent {background:#fce8e6;color:var(--red)}
-.empty{text-align:center;color:var(--muted);padding:52px 24px;font-size:15px}
-
-/* ══════════════════════════════════════════════════════
-   SCREEN 4 — STUDENT REPORT
-══════════════════════════════════════════════════════ */
-#s-report{background:var(--bg)}
-.rpt-body{flex:1;overflow-y:auto;padding:20px 16px 36px;
-  -webkit-overflow-scrolling:touch}
-.rpt-name{font-size:22px;font-weight:700;margin-bottom:4px}
-.rpt-meta{font-size:14px;color:var(--muted);margin-bottom:22px}
-.circ-wrap{display:flex;flex-direction:column;align-items:center;margin-bottom:22px}
-.circ{position:relative;width:134px;height:134px}
-.circ svg{transform:rotate(-90deg)}
-.circ-bg{fill:none;stroke:var(--border);stroke-width:11}
-.circ-fill{fill:none;stroke-width:11;stroke-linecap:round;
-  transition:stroke-dashoffset .6s ease}
-.circ-txt{position:absolute;inset:0;display:flex;flex-direction:column;
-  align-items:center;justify-content:center}
-.circ-pct{font-size:26px;font-weight:700;line-height:1}
-.circ-lbl{font-size:11px;color:var(--muted);margin-top:3px}
-.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:22px}
-.stat-box{background:var(--card);border-radius:11px;padding:12px 6px;
-  text-align:center;box-shadow:0 1px 5px rgba(0,0,0,.08)}
-.stat-n{font-size:22px;font-weight:700;line-height:1}
-.stat-box.p .stat-n{color:var(--green)}
-.stat-box.l .stat-n{color:var(--orange)}
-.stat-box.a .stat-n{color:var(--red)}
-.stat-box.t .stat-n{color:var(--blue)}
-.stat-lbl{font-size:11px;color:var(--muted);margin-top:4px}
-.dots-ttl{font-size:14px;font-weight:600;margin-bottom:10px}
-.dots-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:6px}
-.dot-wrap{display:flex;flex-direction:column;align-items:center;gap:4px}
-.dot{width:33px;height:33px;border-radius:50%;display:flex;
-  align-items:center;justify-content:center;
-  font-size:11px;font-weight:700;color:#fff}
-.dot.present{background:var(--green)}
-.dot.late   {background:var(--orange)}
-.dot.absent {background:var(--red)}
-.dot.no-data{background:var(--border);color:var(--muted)}
-.dot-dt{font-size:10px;color:var(--muted)}
-</style>
+  <style>
+    body { font-family: sans-serif; background: #222; color: #fff; padding: 20px; text-align: center; }
+    .card { background: #333; padding: 20px; border-radius: 10px; max-width: 400px; margin: 0 auto; }
+    input, select { width: 100%; padding: 10px; margin: 10px 0; border-radius: 5px; border: none; }
+    button { width: 100%; padding: 15px; background: #1a73e8; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+    #reader { width: 100%; background: #000; margin-top: 20px; min-height: 300px; }
+    .error { color: #ff4444; background: #330000; padding: 10px; margin: 10px 0; display: none; border: 1px solid red; }
+    .success { color: #44ff44; background: #003300; padding: 10px; margin: 10px 0; display: none; border: 1px solid green; }
+    #status { margin-top: 10px; color: #aaa; }
+  </style>
 </head>
 <body>
 
-<!-- Loading Overlay -->
-<div id="overlay">
-  <div class="spin"></div>
-  <div class="spin-txt" id="overlay-txt">Please wait...</div>
+<div class="card" id="login-screen">
+  <h2>Attendance System</h2>
+  <div id="https-warning" class="error">
+    ⚠️ CAMERA ERROR: You are not using HTTPS.<br>
+    The camera will NOT work on file:// or http://.<br>
+    Please host this on GitHub Pages.
+  </div>
+
+  <input type="text" id="teacher" placeholder="Teacher Name">
+  <select id="section">
+    <option value="All">All Sections</option>
+    <option value="A">Section A</option>
+    <option value="B">Section B</option>
+  </select>
+  <button onclick="startSession()">START SCANNING</button>
+  <div id="api-error" class="error"></div>
 </div>
 
-<!-- ═══════════════ SCREEN 1: LOGIN ═══════════════ -->
-<div id="s-login" class="screen active">
-  <div class="login-card">
-
-    <div class="avatar" id="av">S</div>
-    <div class="school-nm" id="school-nm">Loading...</div>
-    <div class="school-sub">Teacher Attendance Portal</div>
-
-    <div class="fg">
-      <label class="lbl" for="inp-teacher">Teacher Name</label>
-      <input id="inp-teacher" class="inp" type="text"
-             placeholder="Enter your full name"
-             autocomplete="off" autocorrect="off"
-             spellcheck="false" maxlength="60"/>
-      <div class="err-msg" id="name-err">Please enter your name.</div>
-    </div>
-
-    <div class="fg">
-      <label class="lbl" for="inp-section">Session / Section</label>
-      <div class="sel-wrap">
-        <select id="inp-section" class="sel"></select>
-      </div>
-    </div>
-
-    <button class="btn btn-blue" onclick="startSession()">
-      📷 &nbsp;Start Scanning
-    </button>
-
-    <div class="test-row">
-      <button class="btn-test" id="test-btn" onclick="testConn()">
-        🔌 Test Server Connection
-      </button>
-    </div>
-    <div class="conn-status" id="conn-status"></div>
-
-  </div>
+<div class="card" id="scanner-screen" style="display:none;">
+  <h3>Scanning...</h3>
+  <div id="reader"></div>
+  <div id="status">Waiting for camera...</div>
+  <div id="result-msg" class="success"></div>
+  <div id="error-msg" class="error"></div>
+  <button onclick="location.reload()" style="background:#555; margin-top:20px;">Stop / Back</button>
 </div>
 
-<!-- ═══════════════ SCREEN 2: SCANNER ═══════════════ -->
-<div id="s-scanner" class="screen">
-
-  <div class="hdr">
-    <div class="hdr-title" id="scan-school">School</div>
-    <div class="hdr-right" id="live-clock">--:-- --</div>
-  </div>
-  <div class="hdr-sub" id="scan-sub">Teacher: — | Session: —</div>
-
-  <div class="scan-body">
-    <!-- QR viewfinder -->
-    <div id="qr-box"></div>
-
-    <!-- Camera fallback -->
-    <div id="cam-fallback">
-      📷<br><br>
-      <span id="cam-err-msg">Initializing camera...</span>
-    </div>
-
-    <div class="scan-status" id="scan-status">Initializing...</div>
-    <div class="scan-count"  id="scan-count">Session scans: 0</div>
-
-    <!-- Result card -->
-    <div class="res-card" id="res-card">
-      <div class="res-title" id="res-title">✅ PRESENT</div>
-      <div class="res-row"><span class="res-lbl">Name</span><span id="r-name">—</span></div>
-      <div class="res-row"><span class="res-lbl">ID</span>  <span id="r-id">—</span></div>
-      <div class="res-row"><span class="res-lbl">Class</span><span id="r-cls">—</span></div>
-      <div class="res-row"><span class="res-lbl">Time</span><span id="r-time">—</span></div>
-    </div>
-  </div>
-
-  <div class="scan-bar">
-    <button class="btn btn-log" onclick="openLog()">📋 Today's Log</button>
-    <button class="btn btn-end" onclick="endSession()">🚪 End Session</button>
-  </div>
-</div>
-
-<!-- ═══════════════ SCREEN 3: LOG ═══════════════ -->
-<div id="s-log" class="screen">
-
-  <div class="hdr">
-    <div class="hdr-title" id="log-hdr">Today's Attendance</div>
-  </div>
-
-  <div class="log-toolbar">
-    <button class="btn btn-ghost btn-sm" onclick="goScreen('scanner')">
-      🔙 Scanner
-    </button>
-    <a class="open-sheet btn-sm" id="sheet-link"
-       href="#" target="_blank" rel="noopener noreferrer">
-      🔗 Open Sheet
-    </a>
-    <button class="btn btn-ghost btn-sm" onclick="openLog()" style="margin-left:auto">
-      🔄 Refresh
-    </button>
-  </div>
-
-  <div class="sum-bar">
-    <div class="sum-item"><div class="sum-num" id="log-p">0</div><div class="sum-lbl">✅ Present</div></div>
-    <div class="sum-item"><div class="sum-num" id="log-l">0</div><div class="sum-lbl">⏰ Late</div></div>
-    <div class="sum-item"><div class="sum-num" id="log-a">0</div><div class="sum-lbl">❌ Absent</div></div>
-    <div class="sum-item"><div class="sum-num" id="log-t">0</div><div class="sum-lbl">📊 Total</div></div>
-  </div>
-
-  <div class="log-body" id="log-body">
-    <div class="empty">Loading...</div>
-  </div>
-</div>
-
-<!-- ═══════════════ SCREEN 4: REPORT ═══════════════ -->
-<div id="s-report" class="screen">
-
-  <div class="hdr">
-    <div class="hdr-title">Student Report</div>
-    <button onclick="goScreen('log')"
-      style="background:rgba(255,255,255,.15);color:#fff;border:none;
-             height:34px;padding:0 14px;border-radius:7px;
-             font-size:14px;font-weight:600;cursor:pointer;
-             font-family:var(--font)">
-      ✕ Close
-    </button>
-  </div>
-
-  <div class="rpt-body" id="rpt-body">
-    <div class="empty">Loading report...</div>
-  </div>
-</div>
-
-<!-- ═══════════════ JAVASCRIPT ═══════════════ -->
 <script>
-"use strict";
+// ⚠️ PASTE YOUR URL HERE BETWEEN THE QUOTES
+const API_URL = "https://script.google.com/macros/s/AKfycbwCN5NhraOcBs2CwZdssWmCgRH49KRW6GE0hsjmlOrKqxOLYVzR7IQCtcTE_RkbV7V8/exec"; 
+const SECRET_KEY = "KKASB1964@Attend#2026!";
 
-// ─── CONFIGURATION ────────────────────────────────────────
-// ⚠️  Replace ALL four values below before using the app.
-const CONFIG = {
-  API_URL:     "https://script.google.com/macros/s/AKfycbwCN5NhraOcBs2CwZdssWmCgRH49KRW6GE0hsjmlOrKqxOLYVzR7IQCtcTE_RkbV7V8/exec",
-  SECRET_KEY:  "KKASB1964@Attend#2026!",
-  SCHOOL_NAME: "KKASB",
-  SHEET_URL:   "https://docs.google.com/spreadsheets/d/1LrMp3UZlExOjgPPNY0mKS1xoZj1UhOGMIIPCZWRqvMw/edit",
-  COOLDOWN_MS: 3000,
-  SECTIONS:    ["All","A","B","C","D"]
-};
-
-// ─── SESSION STATE ─────────────────────────────────────────
-const S = {
-  teacher:     "",
-  section:     "All",
-  log:         [],
-  cooldown:    false,
-  scanner:     null,
-  clockTimer:  null,
-  lpTimer:     null,
-  scanCount:   0
-};
-
-// ─── BOOT ──────────────────────────────────────────────────
-window.addEventListener("DOMContentLoaded", function () {
-  // Validate CONFIG before anything
-  if (CONFIG.API_URL.includes("YOUR_APPS_SCRIPT")) {
-    console.warn("⚠️ API_URL not configured in CONFIG block.");
-  }
-  if (CONFIG.SECRET_KEY.includes("YOUR_SECRET_KEY")) {
-    console.warn("⚠️ SECRET_KEY not configured in CONFIG block.");
-  }
-
-  // Populate UI
-  document.getElementById("school-nm").textContent  = CONFIG.SCHOOL_NAME;
-  document.getElementById("av").textContent          = CONFIG.SCHOOL_NAME.charAt(0).toUpperCase();
-  document.getElementById("scan-school").textContent = CONFIG.SCHOOL_NAME;
-  document.getElementById("sheet-link").href         = CONFIG.SHEET_URL;
-
-  // Section dropdown
-  const sel = document.getElementById("inp-section");
-  CONFIG.SECTIONS.forEach(function (sec) {
-    const o = document.createElement("option");
-    o.value       = sec;
-    o.textContent = sec === "All" ? "All Sections" : "Section " + sec;
-    sel.appendChild(o);
-  });
-
-  // Restore session storage
-  const t = sessionStorage.getItem("att_teacher") || "";
-  const c = sessionStorage.getItem("att_section") || "All";
-  document.getElementById("inp-teacher").value = t;
-  sel.value = c;
-});
-
-// ─── SCREEN NAVIGATION ─────────────────────────────────────
-function goScreen(name) {
-  document.querySelectorAll(".screen").forEach(function (s) {
-    s.classList.remove("active");
-  });
-  document.getElementById("s-" + name).classList.add("active");
-
-  if (name === "scanner") {
-    startClock();
-  } else {
-    stopClock();
-    if (name !== "scanner" && S.scanner) {
-      // Don't stop scanner when just viewing log/report
-      // Camera keeps running in background
-    }
-  }
+// 1. Immediate HTTPS Check
+if (location.protocol !== "https:" && location.hostname !== "localhost" && location.hostname !== "127.0.0.1") {
+  document.getElementById("https-warning").style.display = "block";
+  alert("CRITICAL ERROR:\nYou are opening this file insecurely (file:// or http://).\nThe camera BLOCKS insecure connections.\n\nYou MUST host this on GitHub Pages (https) or similar.");
 }
 
-// ─── LOADING OVERLAY ───────────────────────────────────────
-function showLoad(txt) {
-  document.getElementById("overlay-txt").textContent = txt || "Please wait...";
-  document.getElementById("overlay").classList.add("on");
-}
-function hideLoad() {
-  document.getElementById("overlay").classList.remove("on");
-}
-
-// ─── LIVE CLOCK ────────────────────────────────────────────
-function startClock() {
-  if (S.clockTimer) return;
-  tickClock();
-  S.clockTimer = setInterval(tickClock, 1000);
-}
-function stopClock() {
-  if (S.clockTimer) { clearInterval(S.clockTimer); S.clockTimer = null; }
-}
-function tickClock() {
-  const n    = new Date();
-  const h    = n.getHours() % 12 || 12;
-  const m    = String(n.getMinutes()).padStart(2,"0");
-  const s    = String(n.getSeconds()).padStart(2,"0");
-  const ap   = n.getHours() >= 12 ? "PM" : "AM";
-  const el   = document.getElementById("live-clock");
-  if (el) el.textContent = h + ":" + m + ":" + s + " " + ap;
-}
-
-// ─── DATE HELPERS ──────────────────────────────────────────
-function todayDMY() {
-  const n = new Date();
-  return String(n.getDate()).padStart(2,"0") + "/" +
-         String(n.getMonth()+1).padStart(2,"0") + "/" +
-         n.getFullYear();
-}
-function niceDate(dmy) {
-  if (!dmy) return "";
-  const p = dmy.split("/");
-  if (p.length !== 3) return dmy;
-  const mo = ["Jan","Feb","Mar","Apr","May","Jun",
-              "Jul","Aug","Sep","Oct","Nov","Dec"];
-  return p[0] + " " + mo[+p[1]-1] + " " + p[2];
-}
-
-// ─── SAFE FETCH with timeout ────────────────────────────────
-function apiFetch(params, timeoutMs) {
-  timeoutMs = timeoutMs || 12000;
-
-  // Guard: check API_URL is configured
-  if (!CONFIG.API_URL || CONFIG.API_URL.includes("YOUR_APPS_SCRIPT")) {
-    return Promise.reject(new Error(
-      "API_URL not configured. Open index.html and set CONFIG.API_URL."
-    ));
-  }
-
-  const url = CONFIG.API_URL + "?" + params;
-  const ctrl = new AbortController();
-  const tid  = setTimeout(function () { ctrl.abort(); }, timeoutMs);
-
-  return fetch(url, {
-    method:  "GET",
-    cache:   "no-cache",
-    mode:    "cors",
-    signal:  ctrl.signal
-  })
-  .then(function (resp) {
-    clearTimeout(tid);
-    if (!resp.ok) throw new Error("HTTP " + resp.status + " — " + resp.statusText);
-    return resp.json();
-  })
-  .catch(function (err) {
-    clearTimeout(tid);
-    if (err.name === "AbortError") throw new Error("Request timed out after " + (timeoutMs/1000) + "s");
-    throw err;
-  });
-}
-
-// ═══════════════════════════════════════════════════════════
-// TEST CONNECTION
-// ═══════════════════════════════════════════════════════════
-function testConn() {
-  const btn = document.getElementById("test-btn");
-  const box = document.getElementById("conn-status");
-  btn.textContent = "Testing...";
-  btn.disabled    = true;
-  box.className   = "conn-status";
-  box.textContent = "";
-
-  // Quick pre-check
-  if (!CONFIG.API_URL || CONFIG.API_URL.includes("YOUR_APPS_SCRIPT")) {
-    box.className   = "conn-status fail";
-    box.textContent = "❌ API_URL is not set!\nOpen index.html → find CONFIG.API_URL → paste your Apps Script /exec URL.";
-    btn.textContent = "🔌 Test Server Connection";
-    btn.disabled    = false;
-    return;
-  }
-
-  apiFetch("action=ping", 10000)
-    .then(function (data) {
-      btn.textContent = "🔌 Test Server Connection";
-      btn.disabled    = false;
-      if (data.status === "ok") {
-        box.className   = "conn-status ok";
-        box.textContent = "✅ Connected!  Server time: " + data.time;
-      } else {
-        box.className   = "conn-status fail";
-        box.textContent = "⚠️ Unexpected response: " + JSON.stringify(data);
-      }
-    })
-    .catch(function (err) {
-      btn.textContent = "🔌 Test Server Connection";
-      btn.disabled    = false;
-      box.className   = "conn-status fail";
-      box.textContent =
-        "❌ Connection failed: " + err.message + "\n\n" +
-        "Checklist:\n" +
-        "① Apps Script deployed as Web App?\n" +
-        "② 'Who has access' set to Anyone?\n" +
-        "③ URL ends in /exec (not /dev)?\n" +
-        "④ Internet working? Try: " + CONFIG.API_URL + "?action=ping";
-    });
-}
-
-// ═══════════════════════════════════════════════════════════
-// SCREEN 1 — SESSION START
-// ═══════════════════════════════════════════════════════════
+// 2. Start Session & Test API
 function startSession() {
-  const nameEl  = document.getElementById("inp-teacher");
-  const nameErr = document.getElementById("name-err");
-  const name    = nameEl.value.trim();
+  const teacher = document.getElementById("teacher").value.trim();
+  if(!teacher) return alert("Enter teacher name");
 
-  if (!name) {
-    nameErr.classList.add("on");
-    nameEl.focus();
-    return;
-  }
-  nameErr.classList.remove("on");
-
-  S.teacher   = name;
-  S.section   = document.getElementById("inp-section").value;
-  S.log       = [];
-  S.scanCount = 0;
-
-  sessionStorage.setItem("att_teacher", name);
-  sessionStorage.setItem("att_section", S.section);
-
-  document.getElementById("scan-sub").textContent =
-    "Teacher: " + name + "  |  Session: " +
-    (S.section === "All" ? "All Sections" : "Section " + S.section);
-
-  document.getElementById("scan-count").textContent = "Session scans: 0";
-
-  goScreen("scanner");
-  startClock();
-  setTimeout(initCamera, 350);
-}
-
-function endSession() {
-  const ok = S.scanCount === 0
-    ? true
-    : window.confirm(
-        "End session?\n\n" + S.scanCount + " student(s) marked in this session."
-      );
-  if (!ok) return;
-  stopCamera();
-  goScreen("login");
-}
-
-// ═══════════════════════════════════════════════════════════
-// SCREEN 2 — CAMERA / QR SCANNING
-// ═══════════════════════════════════════════════════════════
-function setScanSt(txt) {
-  const el = document.getElementById("scan-status");
-  if (el) el.textContent = txt;
-}
-
-function showFallback(msg) {
-  document.getElementById("qr-box").style.display        = "none";
-  document.getElementById("cam-err-msg").innerHTML       = msg;
-  document.getElementById("cam-fallback").classList.add("on");
-}
-
-function hideFallback() {
-  document.getElementById("qr-box").style.display        = "";
-  document.getElementById("cam-fallback").classList.remove("on");
-}
-
-function initCamera() {
-  // Clear old instance
-  stopCamera();
-
-  // Reset viewfinder
-  const box = document.getElementById("qr-box");
-  box.innerHTML = "";
-  hideFallback();
-  setScanSt("Requesting camera permission...");
-
-  // Check API support
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    showFallback(
-      "❌ Camera API not available.<br><br>" +
-      "This browser does not support camera access.<br>" +
-      "Please use <strong>Chrome on Android</strong> or <strong>Safari on iOS</strong>.<br><br>" +
-      "Also ensure the page is served over <strong>HTTPS</strong>."
-    );
-    setScanSt("Camera not supported.");
-    return;
+  // Check API URL format
+  if(API_URL.includes("YOUR_APPS_SCRIPT") || !API_URL.includes("/exec")) {
+    return alert("SETUP ERROR:\nYou did not paste your Web App URL into the code,\nor you pasted the wrong URL.\n\nIt must end in '/exec'.");
   }
 
-  S.scanner = new Html5Qrcode("qr-box", { verbose: false });
+  document.getElementById("api-error").style.display = "none";
+  const btn = document.querySelector("button");
+  btn.textContent = "Testing Connection...";
+  btn.disabled = true;
 
-  const qrConfig = {
-    fps: 8,
-    qrbox: function (w, h) {
-      const sz = Math.floor(Math.min(w, h) * 0.72);
-      return { width: sz, height: sz };
-    },
-    aspectRatio:            1.0,
-    disableFlip:            false,
-    rememberLastUsedCamera: true
-  };
-
-  // Try exact rear camera first, fall back gracefully
-  S.scanner.start(
-    { facingMode: { exact: "environment" } },
-    qrConfig,
-    onQRDecode,
-    function () {}   // suppress per-frame errors
-  )
-  .then(function () {
-    hideFallback();
-    setScanSt("📷 Ready to Scan...");
-  })
-  .catch(function () {
-    // Retry without "exact" — works on most desktop + some phones
-    S.scanner.start(
-      { facingMode: "environment" },
-      qrConfig,
-      onQRDecode,
-      function () {}
-    )
-    .then(function () {
-      hideFallback();
-      setScanSt("📷 Ready to Scan...");
+  // Test Connection
+  fetch(API_URL + "?action=ping")
+    .then(res => {
+      if(res.status === 404) throw new Error("404 Not Found (Wrong Deployment URL)");
+      if(!res.ok) throw new Error("HTTP " + res.status);
+      return res.json();
     })
-    .catch(function (err2) {
-      // Final fallback: let html5-qrcode show its own camera picker
-      S.scanner.start(
-        { facingMode: "user" },
-        qrConfig,
-        onQRDecode,
-        function () {}
-      )
-      .then(function () {
-        hideFallback();
-        setScanSt("📷 Ready to Scan (front cam)...");
-      })
-      .catch(function (err3) {
-        showFallback(
-          "📷 Camera access denied or unavailable.<br><br>" +
-          "<strong>To fix on Chrome Android:</strong><br>" +
-          "Tap the 🔒 lock icon in the address bar<br>" +
-          "→ Site settings → Camera → <strong>Allow</strong><br>" +
-          "→ Reload the page<br><br>" +
-          "<strong>To fix on Safari iOS:</strong><br>" +
-          "Settings → Safari → Camera → <strong>Allow</strong><br><br>" +
-          "<em>Error: " + (err3 ? err3.toString() : "unknown") + "</em>"
-        );
-        setScanSt("⚠️ Camera unavailable.");
-      });
+    .then(data => {
+      if(data.status !== "ok") throw new Error("Invalid API Response");
+      // API OK - Start Camera
+      startCamera();
+    })
+    .catch(err => {
+      btn.textContent = "START SCANNING";
+      btn.disabled = false;
+      const msg = "CONNECTION FAILED: " + err.message + "\n\n1. Did you deploy as 'Anyone'?\n2. Did you copy the '/exec' URL?";
+      document.getElementById("api-error").innerText = msg;
+      document.getElementById("api-error").style.display = "block";
+      alert(msg);
     });
-  });
 }
 
-function stopCamera() {
-  if (S.scanner) {
-    try {
-      S.scanner.stop().catch(function () {});
-    } catch (e) {}
-    S.scanner = null;
-  }
+// 3. Start Camera
+function startCamera() {
+  document.getElementById("login-screen").style.display = "none";
+  document.getElementById("scanner-screen").style.display = "block";
+
+  const scanner = new Html5Qrcode("reader");
+  const config = { fps: 10, qrbox: 250 };
+
+  scanner.start({ facingMode: "environment" }, config, onScanSuccess, onScanError)
+    .catch(err => {
+      alert("CAMERA FAILED TO START:\n" + err + "\n\nEnsure you are using HTTPS and allowed permissions.");
+      document.getElementById("status").innerText = "Camera Error: " + err;
+    });
+
+  window.currentScanner = scanner;
 }
 
-// ─── QR DECODE CALLBACK ────────────────────────────────────
-function onQRDecode(rawData) {
-  if (S.cooldown) return;
-  S.cooldown = true;
-  setScanSt("🔄 Verifying...");
-
-  // ── Step 1: Decrypt ──────────────────────────────────────
-  let plainText    = "";
-  let decryptedOk  = false;
-
+// 4. Handle Scan
+let isScanning = true;
+function onScanSuccess(decodedText) {
+  if(!isScanning) return;
+  
   try {
-    const bytes = CryptoJS.AES.decrypt(rawData, CONFIG.SECRET_KEY);
-    const txt   = bytes.toString(CryptoJS.enc.Utf8);
-    if (txt && txt.length > 0 && txt.indexOf("|") !== -1) {
-      plainText   = txt;
-      decryptedOk = true;
-    }
-  } catch (e) {
-    decryptedOk = false;
+    // Decrypt
+    const bytes = CryptoJS.AES.decrypt(decodedText, SECRET_KEY);
+    const originalText = bytes.toString(CryptoJS.enc.Utf8);
+    
+    if(!originalText.includes("|")) throw new Error("Decryption failed");
+
+    const parts = originalText.split("|");
+    const id = parts[0];
+    const name = parts[1];
+
+    isScanning = false;
+    document.getElementById("status").innerText = "Verifying " + name + "...";
+    
+    // Call API
+    const teacher = document.getElementById("teacher").value;
+    fetch(API_URL + "?action=scan&id=" + encodeURIComponent(id) + "&teacher=" + encodeURIComponent(teacher))
+      .then(res => res.json())
+      .then(data => {
+        const div = document.getElementById("result-msg");
+        div.style.display = "block";
+        div.innerText = "✅ " + (data.studentName || name) + ": " + data.attendanceStatus;
+        
+        // Cooldown
+        setTimeout(() => {
+          div.style.display = "none";
+          document.getElementById("status").innerText = "Ready to scan...";
+          isScanning = true;
+        }, 3000);
+      })
+      .catch(err => {
+        alert("Network Error: " + err.message);
+        isScanning = true;
+      });
+
+  } catch(e) {
+    console.log("Invalid QR");
   }
-
-  // ── Step 2: Invalid card ─────────────────────────────────
-  if (!decryptedOk) {
-    showRes("err", "❌ INVALID CARD", "—", "—", "—", "—");
-    resetAfterDelay();
-    return;
-  }
-
-  // ── Step 3: Extract StudentID ────────────────────────────
-  const parts     = plainText.split("|");
-  const studentId = (parts[0] || "").trim();
-
-  if (!studentId) {
-    showRes("err", "❌ INVALID CARD", "—", "—", "—", "—");
-    resetAfterDelay();
-    return;
-  }
-
-  // ── Step 4: Call API ─────────────────────────────────────
-  const params =
-    "action=scan" +
-    "&id="      + encodeURIComponent(studentId) +
-    "&teacher=" + encodeURIComponent(S.teacher);
-
-  apiFetch(params, 12000)
-    .then(function (data) { handleScanResp(data, studentId); })
-    .catch(function (err) {
-      let msg = err.message || "Unknown error";
-      showRes("err", "❌ SERVER ERROR", msg, studentId, "—", "—");
-      resetAfterDelay();
-    });
 }
 
-function handleScanResp(data, scannedId) {
-  if (data.status === "success") {
-    const isLate = data.attendanceStatus === "Late";
-    const cls    = "Class " + (data.studentClass||"?") +
-                   " — Section " + (data.studentSection||"?");
-    showRes(
-      isLate ? "late" : "ok",
-      isLate ? "⏰ LATE" : "✅ PRESENT",
-      data.studentName || "—",
-      scannedId,
-      cls,
-      data.time || "—"
-    );
-    if (navigator.vibrate) navigator.vibrate([100,50,100]);
-    S.scanCount++;
-    document.getElementById("scan-count").textContent = "Session scans: " + S.scanCount;
-    S.log.push({
-      id: scannedId, name: data.studentName,
-      cls: data.studentClass, sec: data.studentSection,
-      status: data.attendanceStatus, time: data.time
-    });
-
-  } else if (data.status === "duplicate") {
-    const cls = "Class " + (data.studentClass||"?") +
-                " — Section " + (data.studentSection||"?");
-    showRes("dup","🔁 ALREADY MARKED",data.studentName||"—",scannedId,cls,data.time||"—");
-    if (navigator.vibrate) navigator.vibrate(50);
-
-  } else if (data.status === "not_found") {
-    showRes("err","❌ NOT FOUND","Student not in system",scannedId,"—","—");
-    if (navigator.vibrate) navigator.vibrate([200,100,200]);
-
-  } else {
-    showRes("err","❌ ERROR",data.message||"Unknown error",scannedId,"—","—");
-  }
-
-  resetAfterDelay();
+function onScanError(errorMessage) {
+  // Ignore scan errors, they happen every frame no QR is found
 }
-
-function showRes(type, title, name, id, cls, time) {
-  const card = document.getElementById("res-card");
-  card.className = "res-card " + type + " on";
-  document.getElementById("res-title").textContent = title;
-  document.getElementById("r-name").textContent    = name;
-  document.getElementById("r-id").textContent      = id;
-  document.getElementById("r-cls").textContent     = cls;
-  document.getElementById("r-time").textContent    = time;
-  setScanSt(title);
-}
-
-function resetAfterDelay() {
-  setTimeout(function () {
-    document.getElementById("res-card").classList.remove("on");
-    setScanSt("📷 Ready to Scan...");
-    S.cooldown = false;
-  }, CONFIG.COOLDOWN_MS);
-}
-
-// ═══════════════════════════════════════════════════════════
-// SCREEN 3 — TODAY'S LOG
-// ═══════════════════════════════════════════════════════════
-function openLog() {
-  goScreen("log");
-  const today = todayDMY();
-  document.getElementById("log-hdr").textContent =
-    "Today — " + niceDate(today);
-  fetchLog(today);
-}
-
-function fetchLog(date) {
-  showLoad("Loading attendance...");
-  apiFetch("action=getSummary&date=" + encodeURIComponent(date), 15000)
-    .then(function (data) {
-      hideLoad();
-      renderLog(data);
-    })
-    .catch(function (err) {
-      hideLoad();
-      document.getElementById("log-body").innerHTML =
-        '<div class="empty">⚠️ ' + esc(err.message) + '<br><br>' +
-        'Check your internet connection and try refreshing.</div>';
-    });
-}
-
-function renderLog(data) {
-  const body = document.getElementById("log-body");
-
-  if (!data || data.status !== "success" || !data.groups || !data.groups.length) {
-    body.innerHTML = '<div class="empty">No attendance records for today yet.</div>';
-    ["log-p","log-l","log-a","log-t"].forEach(function (id) {
-      document.getElementById(id).textContent = "0";
-    });
-    return;
-  }
-
-  let tp = 0, tl = 0, ta = 0, tt = 0, html = "";
-
-  data.groups.forEach(function (g) {
-    tp += g.present; tl += g.late; ta += g.absent; tt += g.total;
-    html += '<div class="cls-grp">';
-    html += '<div class="cls-hdr">Class ' + esc(g.studentClass) +
-            ' — Section ' + esc(g.section) +
-            '<span class="cls-cnt">' + g.students.length + '</span></div>';
-
-    (g.students || []).forEach(function (st) {
-      const sc  = st.status.toLowerCase();
-      const bdc = "b-" + sc;
-      html +=
-        '<div class="stu-row ' + sc + '"' +
-        ' data-id="' + escAttr(st.id) + '"' +
-        ' onmousedown="lpStart(\'' + escAttr(st.id) + '\')"' +
-        ' onmouseup="lpEnd()" ontouchstart="lpStart(\'' + escAttr(st.id) + '\')"' +
-        ' ontouchend="lpEnd()" ontouchmove="lpEnd()">' +
-        '<div>' +
-        '<div class="stu-nm">' + esc(st.name) + '</div>' +
-        '<div class="stu-meta">' + esc(st.id) + ' &nbsp;•&nbsp; ' + esc(st.time) + '</div>' +
-        '</div>' +
-        '<span class="badge ' + bdc + '">' + esc(st.status) + '</span>' +
-        '</div>';
-    });
-
-    html += '</div>';
-  });
-
-  body.innerHTML = html;
-  document.getElementById("log-p").textContent = tp;
-  document.getElementById("log-l").textContent = tl;
-  document.getElementById("log-a").textContent = ta;
-  document.getElementById("log-t").textContent = tt;
-}
-
-// Long press handlers
-function lpStart(id) {
-  lpEnd();
-  S.lpTimer = setTimeout(function () {
-    S.lpTimer = null;
-    openReport(id);
-  }, 600);
-}
-function lpEnd() {
-  if (S.lpTimer) { clearTimeout(S.lpTimer); S.lpTimer = null; }
-}
-
-// ═══════════════════════════════════════════════════════════
-// SCREEN 4 — STUDENT REPORT
-// ═══════════════════════════════════════════════════════════
-function openReport(id) {
-  goScreen("report");
-  document.getElementById("rpt-body").innerHTML =
-    '<div class="empty">Loading...</div>';
-  showLoad("Loading report...");
-
-  apiFetch("action=getReport&id=" + encodeURIComponent(id), 12000)
-    .then(function (data) {
-      hideLoad();
-      renderReport(data);
-    })
-    .catch(function (err) {
-      hideLoad();
-      document.getElementById("rpt-body").innerHTML =
-        '<div class="empty">⚠️ ' + esc(err.message) + '</div>';
-    });
-}
-
-function renderReport(data) {
-  const body = document.getElementById("rpt-body");
-
-  if (!data || data.status !== "success") {
-    body.innerHTML = '<div class="empty">Report not available.</div>';
-    return;
-  }
-
-  const st   = data.student || {};
-  const sv   = data.stats   || {};
-  const pct  = parseFloat(sv.attendancePercent) || 0;
-  const R    = 56;
-  const CIRC = +(2 * Math.PI * R).toFixed(2);
-  const OFF  = +(CIRC - (pct / 100) * CIRC).toFixed(2);
-  const SC   = pct >= 85 ? "var(--green)" : pct >= 75 ? "var(--orange)" : "var(--red)";
-
-  let dotsHtml = "";
-  (data.last7Days || []).forEach(function (d) {
-    const s   = d.status || "No Data";
-    const dc  = s === "Present" ? "present"
-               : s === "Late"   ? "late"
-               : s === "Absent" ? "absent"
-               : "no-data";
-    const ltr = s === "Present" ? "P"
-               : s === "Late"   ? "L"
-               : s === "Absent" ? "A"
-               : "–";
-    const dt  = d.date ? d.date.substring(0,5) : "—";
-    dotsHtml +=
-      '<div class="dot-wrap">' +
-      '<div class="dot ' + dc + '">' + ltr + '</div>' +
-      '<div class="dot-dt">' + esc(dt) + '</div>' +
-      '</div>';
-  });
-
-  body.innerHTML =
-    '<div class="rpt-name">'  + esc(st.name   || "—") + '</div>' +
-    '<div class="rpt-meta">'  + esc(st.id     || "—") + ' &nbsp;|&nbsp; ' +
-      'Class ' + esc(st.studentClass || "—") +
-      ' — Section ' + esc(st.section || "—") + '</div>' +
-
-    '<div class="circ-wrap">' +
-    '<div class="circ">' +
-    '<svg viewBox="0 0 130 130" width="130" height="130">' +
-    '<circle class="circ-bg"   cx="65" cy="65" r="' + R + '"/>' +
-    '<circle class="circ-fill" cx="65" cy="65" r="' + R + '"' +
-    ' stroke="' + SC + '"' +
-    ' stroke-dasharray="'  + CIRC + '"' +
-    ' stroke-dashoffset="' + OFF  + '"/>' +
-    '</svg>' +
-    '<div class="circ-txt">' +
-    '<div class="circ-pct">' + pct.toFixed(1) + '%</div>' +
-    '<div class="circ-lbl">Attendance</div>' +
-    '</div></div></div>' +
-
-    '<div class="stat-grid">' +
-    '<div class="stat-box p"><div class="stat-n">' + (sv.present    || 0) + '</div><div class="stat-lbl">Present</div></div>' +
-    '<div class="stat-box l"><div class="stat-n">' + (sv.late       || 0) + '</div><div class="stat-lbl">Late</div></div>'    +
-    '<div class="stat-box a"><div class="stat-n">' + (sv.absent     || 0) + '</div><div class="stat-lbl">Absent</div></div>'  +
-    '<div class="stat-box t"><div class="stat-n">' + (sv.totalDays  || 0) + '</div><div class="stat-lbl">Total Days</div></div>' +
-    '</div>' +
-
-    '<div class="dots-ttl">Last 7 Days</div>' +
-    '<div class="dots-row">' +
-    (dotsHtml || '<span style="color:var(--muted);font-size:13px">No records yet</span>') +
-    '</div>';
-}
-
-// ─── XSS HELPERS ───────────────────────────────────────────
-function esc(s) {
-  return String(s||"")
-    .replace(/&/g,"&amp;")
-    .replace(/</g,"&lt;")
-    .replace(/>/g,"&gt;")
-    .replace(/"/g,"&quot;")
-    .replace(/'/g,"&#039;");
-}
-function escAttr(s) {
-  return String(s||"").replace(/'/g,"\\'").replace(/"/g,"&quot;");
-}
-
-// ─── UNLOAD GUARD ──────────────────────────────────────────
-window.addEventListener("beforeunload", function (e) {
-  if (S.scanCount > 0) {
-    e.preventDefault();
-    e.returnValue = "";
-  }
-});
-
-// ─── PREVENT DOUBLE-TAP ZOOM ON BUTTONS ────────────────────
-document.addEventListener("touchend", function (e) {
-  if (e.target.closest("button")) e.preventDefault();
-}, { passive: false });
 </script>
 </body>
 </html>
-
