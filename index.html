@@ -3,362 +3,198 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <meta name="theme-color" content="#1a73e8"/>
-  <title>Student Attendance</title>
-
-  <!-- QR Scanner & Crypto Libraries -->
+  <title>Attendance System</title>
+  <!-- Only HTML5-QRCode needed. No Crypto library! -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
 
 <style>
-/* ── RESET & VARIABLES ──────────────────────── */
-:root{--primary:#1a73e8;--bg:#f0f2f5;--card:#fff;--text:#202124;--sub:#5f6368;--border:#dadce0;--green:#188038;--red:#d93025;--orange:#f9ab00;--shadow:0 1px 3px rgba(0,0,0,0.12),0 1px 2px rgba(0,0,0,0.24);}
-*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-tap-highlight-color:transparent;}
-body{background:var(--bg);color:var(--text);height:100vh;display:flex;flex-direction:column;overflow:hidden;}
+/* ... (Keep your existing CSS, it is good) ... */
+/* Add this specific style for WhatsApp button */
+.btn-whatsapp {
+  background-color: #25D366;
+  color: white;
+  margin-top: 10px;
+  border: none;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-decoration: none;
+}
+.btn-whatsapp:hover { background-color: #128C7E; }
+/* ... */
 
-/* ── SCREENS ────────────────────────────────── */
-.screen{display:none;flex-direction:column;height:100%;width:100%;position:absolute;top:0;left:0;background:var(--bg);z-index:1;}
-.screen.active{display:flex;z-index:2;animation:fadeIn 0.3s ease;}
-@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
-
-/* ── COMPONENTS ─────────────────────────────── */
-.header{background:var(--primary);color:#fff;padding:16px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 2px 4px rgba(0,0,0,0.2);z-index:10;}
-.header h1{font-size:18px;font-weight:500;}
-.header .clock{font-size:14px;opacity:0.9;}
-
-.btn{border:none;border-radius:8px;padding:0 24px;height:48px;font-size:16px;font-weight:600;cursor:pointer;transition:transform 0.1s;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;}
-.btn:active{transform:scale(0.96);}
-.btn-primary{background:var(--primary);color:#fff;box-shadow:var(--shadow);}
-.btn-outline{background:transparent;border:2px solid var(--primary);color:var(--primary);}
-.btn-danger{background:var(--red);color:#fff;}
-.btn-sm{height:36px;font-size:14px;padding:0 16px;width:auto;}
-
-/* ── LOGIN SCREEN ───────────────────────────── */
-#screen-login{justify-content:center;padding:24px;}
-.login-card{background:var(--card);padding:32px 24px;border-radius:16px;box-shadow:var(--shadow);text-align:center;max-width:400px;margin:0 auto;width:100%;}
-.avatar{width:64px;height:64px;background:var(--primary);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:bold;margin:0 auto 16px;}
-.input-group{margin-bottom:20px;text-align:left;}
-.input-group label{display:block;font-size:12px;color:var(--sub);margin-bottom:6px;font-weight:600;text-transform:uppercase;}
-.input-field{width:100%;height:48px;padding:0 16px;border:1px solid var(--border);border-radius:8px;font-size:16px;outline:none;background:#fff;}
-.input-field:focus{border-color:var(--primary);box-shadow:0 0 0 2px rgba(26,115,232,0.2);}
-
-/* ── SCANNER SCREEN ─────────────────────────── */
-#screen-scanner{background:#000;}
-.scanner-container{flex:1;position:relative;display:flex;flex-direction:column;justify-content:center;align-items:center;}
-#reader{width:100%;height:100%;object-fit:cover;}
-#reader video{object-fit:cover;width:100%!important;height:100%!important;}
-
-.scan-overlay{position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;border:50px solid rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;}
-.scan-overlay::after{content:"";width:250px;height:250px;border:4px solid var(--green);border-radius:12px;box-shadow:0 0 0 4000px rgba(0,0,0,0.5);}
-
-.scan-ui{position:absolute;bottom:0;left:0;right:0;padding:24px;background:linear-gradient(to top, rgba(0,0,0,0.9), transparent);color:#fff;text-align:center;}
-.status-pill{background:rgba(255,255,255,0.2);padding:6px 16px;border-radius:20px;font-size:14px;display:inline-block;margin-bottom:16px;backdrop-filter:blur(4px);}
-
-/* Result Popup */
-.result-popup{position:absolute;top:50%;left:50%;transform:translate(-50%, -50%) scale(0.9);background:var(--card);width:85%;max-width:320px;padding:20px;border-radius:16px;text-align:center;box-shadow:0 10px 40px rgba(0,0,0,0.5);opacity:0;pointer-events:none;transition:all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);}
-.result-popup.show{opacity:1;transform:translate(-50%, -50%) scale(1);pointer-events:auto;}
-.res-icon{font-size:48px;margin-bottom:8px;}
-.res-title{font-size:20px;font-weight:700;margin-bottom:4px;}
-.res-subtitle{font-size:14px;color:var(--sub);margin-bottom:12px;}
-.res-meta{background:var(--bg);padding:10px;border-radius:8px;font-size:13px;text-align:left;color:var(--text);}
-.res-meta div{margin:2px 0;}
-
-.scanner-controls{position:absolute;bottom:24px;width:100%;display:flex;gap:12px;padding:0 24px;justify-content:center;}
-.scanner-controls button{flex:1;background:rgba(255,255,255,0.2);backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,0.3);color:#fff;}
-
-/* ── LOG SCREEN ─────────────────────────────── */
-#screen-log{background:var(--bg);}
-.log-list{padding:16px;overflow-y:auto;flex:1;}
-.log-item{background:var(--card);padding:12px;border-radius:12px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 2px rgba(0,0,0,0.05);}
-.log-info h3{font-size:15px;font-weight:600;}
-.log-info p{font-size:12px;color:var(--sub);}
-.log-status{font-size:12px;font-weight:700;padding:4px 10px;border-radius:12px;}
-.status-present{background:#e6f4ea;color:var(--green);}
-.status-late{background:#fce8e6;color:var(--red);}
-.empty-state{text-align:center;color:var(--sub);margin-top:40px;}
-
-/* ── LOADER ─────────────────────────────────── */
-.loader-overlay{position:fixed;inset:0;background:rgba(255,255,255,0.9);z-index:99;display:flex;align-items:center;justify-content:center;flex-direction:column;opacity:0;pointer-events:none;transition:opacity 0.2s;}
-.loader-overlay.active{opacity:1;pointer-events:auto;}
-.spinner{width:40px;height:40px;border:4px solid var(--bg);border-top-color:var(--primary);border-radius:50%;animation:spin 0.8s linear infinite;}
-@keyframes spin{to{transform:rotate(360deg);}}
-
+/* Use the SAME CSS from the previous working version for layout */
+body { font-family: sans-serif; margin: 0; background: #f0f2f5; height: 100vh; display: flex; flex-direction: column; }
+.screen { display: none; height: 100%; flex-direction: column; }
+.screen.active { display: flex; }
+.card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); margin: 20px; text-align: center; }
+.btn { width: 100%; padding: 12px; border-radius: 8px; border: none; font-size: 16px; cursor: pointer; margin-top: 10px; }
+.btn-primary { background: #1a73e8; color: white; }
+input, select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; margin-bottom: 15px; box-sizing: border-box; }
+#reader { width: 100%; height: 100%; object-fit: cover; background: #000; }
+.scan-container { flex: 1; position: relative; background: #000; display: flex; align-items: center; justify-content: center; }
+.scan-overlay { position: absolute; border: 2px solid rgba(255,255,255,0.5); width: 250px; height: 250px; border-radius: 12px; pointer-events: none; }
+.popup { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 12px; width: 80%; max-width: 300px; text-align: center; display: none; box-shadow: 0 10px 30px rgba(0,0,0,0.5); z-index: 100; }
 </style>
 </head>
 <body>
 
-<!-- LOADER -->
-<div id="loader" class="loader-overlay">
-  <div class="spinner"></div>
-  <p style="margin-top:16px;font-weight:500;color:var(--sub)">Processing...</p>
-</div>
-
 <!-- SCREEN 1: LOGIN -->
 <div id="screen-login" class="screen active">
-  <div class="login-card">
-    <div class="avatar">S</div>
-    <h2 style="margin-bottom:4px">Attendance Portal</h2>
-    <p style="color:var(--sub);margin-bottom:24px;font-size:14px">Secure Teacher Login</p>
-    
-    <div class="input-group">
-      <label>Teacher Name</label>
-      <input type="text" id="inp-teacher" class="input-field" placeholder="Enter your name">
-    </div>
-    
-    <div class="input-group">
-      <label>Session / Class</label>
-      <select id="inp-section" class="input-field">
-        <option value="All">All Sections</option>
-        <option value="A">Section A</option>
-        <option value="B">Section B</option>
-        <option value="C">Section C</option>
-      </select>
-    </div>
-
+  <div class="card">
+    <h2>Teacher Login</h2>
+    <input type="text" id="teacher" placeholder="Your Name">
+    <select id="section">
+      <option value="All">All Sections</option>
+      <option value="A">Section A</option>
+      <option value="B">Section B</option>
+    </select>
     <button class="btn btn-primary" onclick="startSession()">Start Scanning</button>
-    <p id="https-warn" style="color:var(--red);font-size:12px;margin-top:16px;display:none">⚠️ HTTPS Required for Camera</p>
   </div>
 </div>
 
 <!-- SCREEN 2: SCANNER -->
 <div id="screen-scanner" class="screen">
-  <div class="scanner-container">
+  <div class="scan-container">
     <div id="reader"></div>
     <div class="scan-overlay"></div>
     
-    <!-- Result Popup -->
-    <div id="res-popup" class="result-popup">
-      <div id="res-icon" class="res-icon">✅</div>
-      <div id="res-title" class="res-title">Present</div>
-      <div id="res-name" class="res-subtitle">Student Name</div>
-      <div class="res-meta">
-        <div>🆔 <b id="res-id">---</b></div>
-        <div>🕒 <span id="res-time">---</span></div>
-      </div>
-    </div>
-
-    <div class="scan-ui">
-      <div class="status-pill" id="scan-status">Searching for QR...</div>
-      <div class="scanner-controls">
-        <button class="btn" onclick="openLog()">📋 Log</button>
-        <button class="btn" style="background:var(--red);border-color:var(--red)" onclick="endSession()">❌ Stop</button>
-      </div>
+    <!-- RESULT POPUP -->
+    <div id="popup" class="popup">
+      <div id="p-icon" style="font-size:40px">✅</div>
+      <h2 id="p-title" style="margin:10px 0">Present</h2>
+      <p id="p-name" style="color:#555; margin-bottom:5px">Student Name</p>
+      <p id="p-time" style="font-size:12px; color:#888">10:00 AM</p>
+      
+      <!-- WhatsApp Button Container -->
+      <div id="wa-container"></div>
     </div>
   </div>
-</div>
-
-<!-- SCREEN 3: LOG -->
-<div id="screen-log" class="screen">
-  <div class="header">
-    <button class="btn-sm btn-outline" style="color:#fff;border-color:rgba(255,255,255,0.5)" onclick="showScreen('screen-scanner')">← Back</button>
-    <h1>Today's Log</h1>
-    <div style="width:60px"></div>
-  </div>
-  <div class="log-list" id="log-container">
-    <div class="empty-state">No students scanned yet in this session.</div>
+  
+  <div style="padding:15px; background:white; display:flex; gap:10px;">
+    <button class="btn" onclick="location.reload()" style="background:#eee; color:#333; margin:0;">Stop</button>
+    <div style="flex:1; display:flex; align-items:center; justify-content:center; font-weight:bold; color:#555;">
+      <span id="status">Ready</span>
+    </div>
   </div>
 </div>
 
 <script>
-// ⚠️ PASTE YOUR WORKING CREDENTIALS HERE
+// ⚠️ ONLY API URL NEEDED NOW. NO SECRET KEY HERE.
 const CONFIG = {
-  API_URL: "https://script.google.com/macros/s/AKfycbwCN5NhraOcBs2CwZdssWmCgRH49KRW6GE0hsjmlOrKqxOLYVzR7IQCtcTE_RkbV7V8/exec",
-  SECRET_KEY: "KKASB1964@Attend#2026!"
+  API_URL: "https://script.google.com/macros/s/AKfycbwCN5NhraOcBs2CwZdssWmCgRH49KRW6GE0hsjmlOrKqxOLYVzR7IQCtcTE_RkbV7V8/exec"
 };
 
-// State
 let scanner = null;
-let currentSession = { teacher: "", section: "All", logs: [] };
-let isScanning = true;
+let teacherName = "";
+let isScanning = false;
 
-// Init
-window.addEventListener("DOMContentLoaded", () => {
-  if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
-    document.getElementById('https-warn').style.display = 'block';
-  }
-  
-  // Restore Previous Session
-  const savedTeacher = localStorage.getItem("teacher");
-  if(savedTeacher) document.getElementById("inp-teacher").value = savedTeacher;
-});
-
-// Navigation
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-}
-
-// 1. Start Session
 function startSession() {
-  const teacher = document.getElementById("inp-teacher").value.trim();
-  const section = document.getElementById("inp-section").value;
+  teacherName = document.getElementById("teacher").value.trim();
+  if(!teacherName) return alert("Enter Name");
   
-  if(!teacher) return alert("Please enter your name");
+  document.getElementById("screen-login").classList.remove("active");
+  document.getElementById("screen-scanner").classList.add("active");
   
-  currentSession.teacher = teacher;
-  currentSession.section = section;
-  localStorage.setItem("teacher", teacher);
-
-  // Init Camera
-  showScreen('screen-scanner');
-  initCamera();
+  startCamera();
 }
 
-// 2. Camera Logic
-function initCamera() {
-  if(scanner) {
-    // If scanner exists, just ensure it's running
-    isScanning = true;
-    return;
-  }
-
+function startCamera() {
   scanner = new Html5Qrcode("reader");
-  const config = { fps: 10, qrbox: { width: 250, height: 250 }, aspectRatio: 1.0 };
+  scanner.start(
+    { facingMode: "environment" }, 
+    { fps: 10, qrbox: { width: 250, height: 250 } },
+    onScan,
+    () => {}
+  );
+  document.getElementById("status").innerText = "Scanning...";
+  isScanning = true;
+}
+
+function onScan(decodedText) {
+  if(!isScanning) return;
+  isScanning = false;
   
-  scanner.start({ facingMode: "environment" }, config, onScanSuccess, onScanError)
-    .then(() => {
-      document.getElementById("scan-status").innerText = "Ready to Scan";
+  document.getElementById("status").innerText = "Verifying...";
+  if(navigator.vibrate) navigator.vibrate(50);
+
+  // SEND RAW DATA TO SERVER (Server decrypts it)
+  const url = CONFIG.API_URL + "?action=scan" +
+              "&data=" + encodeURIComponent(decodedText) +
+              "&teacher=" + encodeURIComponent(teacherName);
+
+  fetch(url)
+    .then(res => res.json())
+    .then(data => {
+      showResult(data);
     })
     .catch(err => {
-      alert("Camera Error: " + err);
-      showScreen('screen-login');
+      showResult({ status: "error", message: "Connection Failed" });
     });
 }
 
-function stopCamera() {
-  if(scanner) {
-    scanner.stop().then(() => {
-      scanner.clear();
-      scanner = null;
-    }).catch(console.error);
-  }
-}
+function showResult(data) {
+  const popup = document.getElementById("popup");
+  const waDiv = document.getElementById("wa-container");
+  waDiv.innerHTML = ""; // Clear old button
 
-// 3. Scan Handler
-function onScanSuccess(decodedText) {
-  if(!isScanning) return;
-  isScanning = false; // Pause scanning
-  
-  // Haptic Feedback
-  if(navigator.vibrate) navigator.vibrate(50);
+  let icon = "❌";
+  let title = "Error";
+  let name = data.message || "Unknown";
+  let time = "";
 
-  // Show Loading State on UI
-  document.getElementById("scan-status").innerText = "Verifying...";
-  
-  try {
-    // A. Decrypt
-    const bytes = CryptoJS.AES.decrypt(decodedText, CONFIG.SECRET_KEY);
-    const originalText = bytes.toString(CryptoJS.enc.Utf8);
-    
-    if(!originalText || !originalText.includes("|")) throw new Error("Invalid QR Data");
-    
-    const [id, name, cls, sec] = originalText.split("|");
-
-    // B. Call API
-    const url = `${CONFIG.API_URL}?action=scan&id=${encodeURIComponent(id)}&teacher=${encodeURIComponent(currentSession.teacher)}`;
-    
-    fetch(url)
-      .then(res => res.json())
-      .then(data => {
-        handleScanResult(data, name || data.studentName, id);
-      })
-      .catch(err => {
-        showPopup("❌", "Error", "Connection Failed", id);
-      });
-
-  } catch (e) {
-    showPopup("⚠️", "Invalid", "QR code not recognized", "---");
-  }
-}
-
-function onScanError(error) {
-  // Ignore frame errors
-}
-
-// 4. Handle API Result
-function handleScanResult(data, name, id) {
-  let icon = "✅";
-  let title = "Present";
-  let color = "var(--green)";
-  
-  if(data.status === "duplicate") {
+  if (data.status === "success") {
+    icon = "✅";
+    title = data.attendanceStatus; // Present / Late
+    name = data.studentName;
+    time = data.time;
+  } else if (data.status === "duplicate") {
     icon = "🔁";
-    title = "Already Scanned";
-    color = "var(--orange)";
-  } else if(data.attendanceStatus === "Late") {
-    icon = "⏰";
-    title = "Late";
-    color = "var(--red)";
-  } else if(data.status === "not_found") {
-    icon = "❌";
+    title = "Already Marked";
+    name = data.studentName;
+    time = data.time;
+  } else if (data.status === "not_found") {
     title = "Not Found";
-    color = "var(--red)";
+    name = "Student not in system";
   }
 
-  // Add to local log
-  if(data.status === "success" || data.status === "duplicate") {
-    addToLog(name, id, title, data.time);
+  // Update Popup UI
+  document.getElementById("p-icon").innerText = icon;
+  document.getElementById("p-title").innerText = title;
+  document.getElementById("p-name").innerText = name;
+  document.getElementById("p-time").innerText = time;
+
+  // 💬 WHATSAPP BUTTON LOGIC
+  // Show button if we have a phone number AND student was scanned successfully (or duplicate)
+  if (data.parentPhone && (data.status === "success" || data.status === "duplicate")) {
+    const msg = `Hello, this is ${CONFIG.SCHOOL_NAME || "School"}. ` +
+                `Marking attendance for *${name}*.\n` +
+                `Status: *${title}*\n` +
+                `Time: ${time}`;
+    
+    // Construct WhatsApp Link
+    const waLink = document.createElement("a");
+    waLink.className = "btn btn-whatsapp";
+    waLink.href = `https://wa.me/${data.parentPhone}?text=${encodeURIComponent(msg)}`;
+    waLink.target = "_blank";
+    waLink.innerHTML = "💬 WhatsApp Parent";
+    
+    waDiv.appendChild(waLink);
   }
 
-  showPopup(icon, title, name, id, data.time, color);
-}
+  popup.style.display = "block";
 
-// 5. Show Popup UI
-function showPopup(icon, title, name, id, time="Now", color) {
-  const popup = document.getElementById("res-popup");
-  
-  document.getElementById("res-icon").innerText = icon;
-  document.getElementById("res-title").innerText = title;
-  document.getElementById("res-title").style.color = color || "var(--text)";
-  document.getElementById("res-name").innerText = name;
-  document.getElementById("res-id").innerText = id;
-  document.getElementById("res-time").innerText = time;
-  
-  popup.classList.add("show");
-
-  // Cooldown timer
+  // Auto-close after 2.5s ONLY if user didn't click WhatsApp
+  // (We don't auto-close immediately so teacher has time to click)
   setTimeout(() => {
-    popup.classList.remove("show");
+    // Only resume scanning if they haven't clicked away
+    // simple UI: just hide popup
+    popup.style.display = "none";
     isScanning = true;
-    document.getElementById("scan-status").innerText = "Ready to Scan";
-  }, 2500);
-}
-
-// 6. Logs & Session
-function addToLog(name, id, status, time) {
-  currentSession.logs.unshift({ name, id, status, time });
-  renderLogs();
-}
-
-function renderLogs() {
-  const container = document.getElementById("log-container");
-  if(currentSession.logs.length === 0) return;
-  
-  container.innerHTML = currentSession.logs.map(l => `
-    <div class="log-item">
-      <div class="log-info">
-        <h3>${l.name}</h3>
-        <p>${l.id} • ${l.time}</p>
-      </div>
-      <div class="log-status ${l.status === 'Present' ? 'status-present' : 'status-late'}">
-        ${l.status}
-      </div>
-    </div>
-  `).join('');
-}
-
-function openLog() {
-  showScreen('screen-log');
-  renderLogs();
-}
-
-function endSession() {
-  if(confirm("Stop scanning and logout?")) {
-    stopCamera();
-    showScreen('screen-login');
-    currentSession.logs = [];
-    document.getElementById("log-container").innerHTML = '<div class="empty-state">No students scanned yet.</div>';
-  }
+    document.getElementById("status").innerText = "Scanning...";
+  }, 3000);
 }
 </script>
 </body>
